@@ -1,0 +1,6 @@
+{
+  "name": "Feedback Tracker - Google Apps Script Web App",
+  "description": "Monthly Feedback Tracker & Action Register with SheetJS Excel processing and real-time Cloud Firestore database persistence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

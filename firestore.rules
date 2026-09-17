@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidFeedbackItem() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['id', 'caseNumber', 'caseStatus', 'date', 'tableName'])
+        && data.id is string && data.id.size() <= 100
+        && data.caseNumber is string && data.caseNumber.size() <= 100
+        && data.caseStatus is string && data.caseStatus.size() <= 50
+        && data.date is string && data.date.size() <= 30
+        && data.tableName is string && data.tableName.size() <= 100;
+    }
+
+    // Feedback items collection rules
+    match /feedback_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isValidFeedbackItem();
+      allow delete: if isAuthenticated();
+    }
+
+    // System metadata collection rules
+    match /system_meta/{metaId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Default deny for all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
