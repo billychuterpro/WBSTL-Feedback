@@ -3,6 +3,8 @@ import { getAuth, signInAnonymously, onAuthStateChanged, User } from 'firebase/a
 import {
   getFirestore,
   initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   setLogLevel,
   collection,
   doc,
@@ -36,12 +38,17 @@ const customDbId = (firebaseConfig as Record<string, any>).firestoreDatabaseId;
 
 function getOrInitializeFirestore(): Firestore {
   try {
+    const cacheConfig = persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    });
     if (customDbId) {
       return initializeFirestore(app, {
+        localCache: cacheConfig,
         experimentalAutoDetectLongPolling: true,
       }, customDbId);
     }
     return initializeFirestore(app, {
+      localCache: cacheConfig,
       experimentalAutoDetectLongPolling: true,
     });
   } catch (e) {
