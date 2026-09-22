@@ -158,7 +158,13 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
   );
 
   const inProgressCount = useMemo(
-    () => activeItems.filter((i) => i.status === 'InProgress').length,
+    () =>
+      activeItems.filter(
+        (i) =>
+          (i.status === 'InProgress' || i.status === 'Pending' || String(i.caseStatus).toLowerCase() === 'open') &&
+          String(i.caseStatus).toLowerCase() !== 'closed' &&
+          i.status !== 'Resolved'
+      ).length,
     [activeItems]
   );
   const resolvedCount = useMemo(
@@ -362,7 +368,9 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
         (statusFilter === 'Resolved' || statusFilter === 'Closed'
           ? item.status === 'Resolved' || String(item.caseStatus).toLowerCase() === 'closed'
           : statusFilter === 'InProgress' || statusFilter === 'Open'
-          ? item.status === 'InProgress' || item.status === 'Pending' || String(item.caseStatus).toLowerCase() !== 'closed'
+          ? (item.status === 'InProgress' || item.status === 'Pending' || String(item.caseStatus).toLowerCase() === 'open') &&
+            String(item.caseStatus).toLowerCase() !== 'closed' &&
+            item.status !== 'Resolved'
           : item.status === statusFilter);
 
       return matchesSearch && matchesType && matchesDept && matchesVenue && matchesStatus;
@@ -1670,7 +1678,7 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                             }`}
                           >
                             {item.status === 'Resolved' || String(item.caseStatus).toLowerCase() === 'closed'
-                              ? 'Resolved'
+                              ? 'Closed'
                               : item.status === 'InProgress' || String(item.caseStatus).toLowerCase() === 'open'
                               ? 'In Progress'
                               : item.status === 'Pending'
@@ -1724,7 +1732,13 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                   Action Status
                                 </label>
                                 <select
-                                  value={editActionItem.status}
+                                  value={
+                                    editActionItem.status === 'Resolved' || String(editActionItem.caseStatus).toLowerCase() === 'closed'
+                                      ? 'Resolved'
+                                      : editActionItem.status === 'Pending'
+                                      ? 'Pending'
+                                      : 'InProgress'
+                                  }
                                   onChange={(e) => {
                                     const nextStatus = e.target.value as FeedbackStatus;
                                     setEditActionItem({
@@ -1733,11 +1747,11 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                       caseStatus: nextStatus === 'Resolved' ? 'Closed' : 'Open',
                                     });
                                   }}
-                                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500"
+                                  className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
                                 >
+                                  <option value="InProgress">Open (In Progress)</option>
+                                  <option value="Resolved">Closed</option>
                                   <option value="Pending">Pending Review</option>
-                                  <option value="InProgress">In Progress</option>
-                                  <option value="Resolved">Resolved / Closed</option>
                                 </select>
                               </div>
 

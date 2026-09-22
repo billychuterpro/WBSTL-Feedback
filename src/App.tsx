@@ -84,17 +84,30 @@ function sanitizeFeedbackItem(item: any, fallbackId?: string): FeedbackItem {
 
   const normalizedType = isKnownComplaint ? 'Complaint' : normalizeTypeName(rawType);
   const isPositiveType = !isKnownComplaint && (isComplimentType(normalizedType) || isThankYouType(normalizedType));
-  const isComplaint = isKnownComplaint || normalizedType === 'Complaint';
-  const finalCaseStatus = isPositiveType
-    ? 'Closed'
-    : isComplaint
-    ? (item.caseStatus === 'Closed' ? 'Open' : (item.caseStatus || 'Open'))
-    : (item.caseStatus || rawStatus || 'Open');
-  const finalActionStatus: FeedbackStatus = isPositiveType
-    ? 'Resolved'
-    : isComplaint
-    ? (item.status && item.status !== 'Resolved' ? item.status : 'InProgress')
-    : (item.status || 'InProgress');
+
+  // Determine caseStatus & actionStatus:
+  let finalCaseStatus = item.caseStatus || rawStatus;
+  let finalActionStatus: FeedbackStatus = item.status;
+
+  if (item.status === 'Resolved' || String(finalCaseStatus).toLowerCase() === 'closed') {
+    finalCaseStatus = 'Closed';
+    finalActionStatus = 'Resolved';
+  } else if (item.status === 'InProgress' || String(finalCaseStatus).toLowerCase() === 'open') {
+    finalCaseStatus = 'Open';
+    finalActionStatus = 'InProgress';
+  } else if (item.status === 'Pending') {
+    finalCaseStatus = finalCaseStatus || 'Open';
+    finalActionStatus = 'Pending';
+  } else {
+    // Default fallback when neither status nor caseStatus is set:
+    if (isPositiveType) {
+      finalCaseStatus = 'Closed';
+      finalActionStatus = 'Resolved';
+    } else {
+      finalCaseStatus = 'Open';
+      finalActionStatus = 'InProgress';
+    }
+  }
 
   const rawDate = item.date || item.visitDate;
   const isoDate = normalizeDateToIso(rawDate);
@@ -152,15 +165,15 @@ function mergeAndDeduplicateItems(
     const isPositiveType = isComplimentType(incoming.type) || isThankYouType(incoming.type);
 
     if (existing) {
-      // Update existing item without creating a duplicate, preserving any user-entered action notes
+      // Existing item takes precedence, preserving user-updated status, action notes, owner, etc.
       map.set(key, {
-        ...existing,
         ...incoming,
-        caseStatus: isPositiveType ? 'Closed' : (incoming.caseStatus || existing.caseStatus),
-        actionTaken: incoming.actionTaken || existing.actionTaken || (isPositiveType ? 'Positive feedback logged and commended with team.' : ''),
-        actionOwner: incoming.actionOwner || existing.actionOwner || (isPositiveType ? 'Team Supervisor' : 'Duty Manager'),
-        actionDueDate: incoming.actionDueDate || existing.actionDueDate || '',
-        status: isPositiveType ? 'Resolved' : (incoming.status && incoming.status !== 'Pending' ? incoming.status : existing.status),
+        ...existing,
+        caseStatus: existing.caseStatus || incoming.caseStatus || (isPositiveType ? 'Closed' : 'Open'),
+        status: existing.status || incoming.status || (isPositiveType ? 'Resolved' : 'InProgress'),
+        actionTaken: existing.actionTaken !== undefined && existing.actionTaken !== '' ? existing.actionTaken : (incoming.actionTaken || ''),
+        actionOwner: existing.actionOwner !== undefined && existing.actionOwner !== '' ? existing.actionOwner : (incoming.actionOwner || ''),
+        actionDueDate: existing.actionDueDate || incoming.actionDueDate || '',
         actionLogs:
           existing.actionLogs && existing.actionLogs.length > 0
             ? existing.actionLogs
@@ -398,12 +411,17 @@ export default function App() {
 
   // Handle single item update & Firestore persistence
   const handleUpdateItem = (updated: FeedbackItem) => {
-    setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    setItems((prev) => {
+      const next = prev.map((item) => (item.id === updated.id ? updated : item));
+      localStorage.setItem('gas_feedback_items_v8', JSON.stringify(next));
+      return next;
+    });
     saveFeedbackItemToFirestore(updated).catch((err) =>
       console.error('Failed to update Firestore document:', err)
     );
+    const displayStatus = updated.caseStatus === 'Closed' || updated.status === 'Resolved' ? 'Closed' : updated.status === 'InProgress' ? 'In Progress' : 'Pending';
     setBannerNotice({
-      msg: `Updated case action details for ${updated.caseNumber || updated.id} (Saved to Cloud DB).`,
+      msg: `Updated case action details for ${updated.caseNumber || updated.id}: Status is now ${displayStatus} (Saved to Cloud DB).`,
       type: 'success',
     });
   };
