@@ -92,12 +92,12 @@ function sanitizeFeedbackItem(item: any, fallbackId?: string): FeedbackItem {
   if (item.status === 'Resolved' || String(finalCaseStatus).toLowerCase() === 'closed') {
     finalCaseStatus = 'Closed';
     finalActionStatus = 'Resolved';
+  } else if (item.status === 'Pending' || String(finalCaseStatus).toLowerCase().includes('pending')) {
+    finalCaseStatus = 'Pending Review';
+    finalActionStatus = 'Pending';
   } else if (item.status === 'InProgress' || String(finalCaseStatus).toLowerCase() === 'open') {
     finalCaseStatus = 'Open';
     finalActionStatus = 'InProgress';
-  } else if (item.status === 'Pending') {
-    finalCaseStatus = finalCaseStatus || 'Open';
-    finalActionStatus = 'Pending';
   } else {
     // Default fallback when neither status nor caseStatus is set:
     if (isPositiveType) {
@@ -419,7 +419,12 @@ export default function App() {
     saveFeedbackItemToFirestore(updated).catch((err) =>
       console.error('Failed to update Firestore document:', err)
     );
-    const displayStatus = updated.caseStatus === 'Closed' || updated.status === 'Resolved' ? 'Closed' : updated.status === 'InProgress' ? 'In Progress' : 'Pending';
+    const displayStatus =
+      updated.caseStatus === 'Closed' || updated.status === 'Resolved'
+        ? 'Closed'
+        : updated.status === 'Pending' || String(updated.caseStatus).toLowerCase().includes('pending')
+        ? 'Pending Review'
+        : 'In Progress';
     setBannerNotice({
       msg: `Updated case action details for ${updated.caseNumber || updated.id}: Status is now ${displayStatus} (Saved to Cloud DB).`,
       type: 'success',

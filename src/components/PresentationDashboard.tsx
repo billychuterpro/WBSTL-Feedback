@@ -157,22 +157,30 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
     [activeItems]
   );
 
-  const inProgressCount = useMemo(
-    () =>
-      activeItems.filter(
-        (i) =>
-          (i.status === 'InProgress' || i.status === 'Pending' || String(i.caseStatus).toLowerCase() === 'open') &&
-          String(i.caseStatus).toLowerCase() !== 'closed' &&
-          i.status !== 'Resolved'
-      ).length,
-    [activeItems]
-  );
   const resolvedCount = useMemo(
     () => activeItems.filter((i) => i.status === 'Resolved' || String(i.caseStatus).toLowerCase() === 'closed').length,
     [activeItems]
   );
   const pendingCount = useMemo(
-    () => activeItems.filter((i) => i.status === 'Pending').length,
+    () =>
+      activeItems.filter(
+        (i) =>
+          (i.status === 'Pending' || String(i.caseStatus).toLowerCase().includes('pending')) &&
+          i.status !== 'Resolved' &&
+          String(i.caseStatus).toLowerCase() !== 'closed'
+      ).length,
+    [activeItems]
+  );
+  const inProgressCount = useMemo(
+    () =>
+      activeItems.filter(
+        (i) =>
+          (i.status === 'InProgress' || String(i.caseStatus).toLowerCase() === 'open') &&
+          i.status !== 'Pending' &&
+          !String(i.caseStatus).toLowerCase().includes('pending') &&
+          String(i.caseStatus).toLowerCase() !== 'closed' &&
+          i.status !== 'Resolved'
+      ).length,
     [activeItems]
   );
 
@@ -367,8 +375,14 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
         statusFilter === 'ALL' ||
         (statusFilter === 'Resolved' || statusFilter === 'Closed'
           ? item.status === 'Resolved' || String(item.caseStatus).toLowerCase() === 'closed'
+          : statusFilter === 'Pending'
+          ? (item.status === 'Pending' || String(item.caseStatus).toLowerCase().includes('pending')) &&
+            item.status !== 'Resolved' &&
+            String(item.caseStatus).toLowerCase() !== 'closed'
           : statusFilter === 'InProgress' || statusFilter === 'Open'
-          ? (item.status === 'InProgress' || item.status === 'Pending' || String(item.caseStatus).toLowerCase() === 'open') &&
+          ? (item.status === 'InProgress' || String(item.caseStatus).toLowerCase() === 'open') &&
+            item.status !== 'Pending' &&
+            !String(item.caseStatus).toLowerCase().includes('pending') &&
             String(item.caseStatus).toLowerCase() !== 'closed' &&
             item.status !== 'Resolved'
           : item.status === statusFilter);
@@ -1471,6 +1485,20 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
 
                   <button
                     onClick={() => {
+                      setStatusFilter(statusFilter === 'Pending' ? 'ALL' : 'Pending');
+                      setTypeFilter('ALL');
+                    }}
+                    className={`px-3 py-1 text-xs rounded-full font-medium transition flex items-center gap-1 ${
+                      statusFilter === 'Pending'
+                        ? 'bg-sky-500 text-slate-950 font-bold shadow'
+                        : 'bg-sky-950/50 text-sky-300 hover:bg-sky-900/60 border border-sky-800/50'
+                    }`}
+                  >
+                    Pending Review ({pendingCount})
+                  </button>
+
+                  <button
+                    onClick={() => {
                       setStatusFilter(statusFilter === 'Closed' ? 'ALL' : 'Closed');
                       setTypeFilter('ALL');
                     }}
@@ -1672,18 +1700,16 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                             className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                               item.status === 'Resolved' || String(item.caseStatus).toLowerCase() === 'closed'
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : item.status === 'InProgress' || String(item.caseStatus).toLowerCase() === 'open'
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                : item.status === 'Pending' || String(item.caseStatus).toLowerCase().includes('pending')
+                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             }`}
                           >
                             {item.status === 'Resolved' || String(item.caseStatus).toLowerCase() === 'closed'
                               ? 'Closed'
-                              : item.status === 'InProgress' || String(item.caseStatus).toLowerCase() === 'open'
-                              ? 'In Progress'
-                              : item.status === 'Pending'
+                              : item.status === 'Pending' || String(item.caseStatus).toLowerCase().includes('pending')
                               ? 'Pending Review'
-                              : (item.caseStatus || 'Open')}
+                              : 'In Progress'}
                           </span>
 
                           <button className="p-1 text-slate-400 hover:text-white transition">
@@ -1735,7 +1761,7 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                   value={
                                     editActionItem.status === 'Resolved' || String(editActionItem.caseStatus).toLowerCase() === 'closed'
                                       ? 'Resolved'
-                                      : editActionItem.status === 'Pending'
+                                      : editActionItem.status === 'Pending' || String(editActionItem.caseStatus).toLowerCase().includes('pending')
                                       ? 'Pending'
                                       : 'InProgress'
                                   }
@@ -1744,14 +1770,19 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                     setEditActionItem({
                                       ...editActionItem,
                                       status: nextStatus,
-                                      caseStatus: nextStatus === 'Resolved' ? 'Closed' : 'Open',
+                                      caseStatus:
+                                        nextStatus === 'Resolved'
+                                          ? 'Closed'
+                                          : nextStatus === 'Pending'
+                                          ? 'Pending Review'
+                                          : 'Open',
                                     });
                                   }}
                                   className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
                                 >
                                   <option value="InProgress">Open (In Progress)</option>
-                                  <option value="Resolved">Closed</option>
                                   <option value="Pending">Pending Review</option>
+                                  <option value="Resolved">Closed</option>
                                 </select>
                               </div>
 
