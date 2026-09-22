@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Header } from './components/Header';
 import { ExcelUploader } from './components/ExcelUploader';
 import { PresentationDashboard } from './components/PresentationDashboard';
 
@@ -128,7 +127,7 @@ function sanitizeFeedbackItem(item: any, fallbackId?: string): FeedbackItem {
     venue: venue || item.venue || item.area || 'General Area',
     feedbackDetail: item.feedbackDetail || '(No description provided)',
     actionTaken: item.actionTaken || '',
-    actionOwner: item.actionOwner || '',
+    actionOwner: item.actionOwner === 'Duty Manager' ? '' : (item.actionOwner || ''),
     actionDueDate: item.actionDueDate || '',
     status: finalActionStatus,
     actionLogs: item.actionLogs || [],
@@ -172,7 +171,10 @@ function mergeAndDeduplicateItems(
         caseStatus: existing.caseStatus || incoming.caseStatus || (isPositiveType ? 'Closed' : 'Open'),
         status: existing.status || incoming.status || (isPositiveType ? 'Resolved' : 'InProgress'),
         actionTaken: existing.actionTaken !== undefined && existing.actionTaken !== '' ? existing.actionTaken : (incoming.actionTaken || ''),
-        actionOwner: existing.actionOwner !== undefined && existing.actionOwner !== '' ? existing.actionOwner : (incoming.actionOwner || ''),
+        actionOwner:
+          existing.actionOwner !== undefined && existing.actionOwner !== '' && existing.actionOwner !== 'Duty Manager'
+            ? existing.actionOwner
+            : (incoming.actionOwner === 'Duty Manager' ? '' : (incoming.actionOwner || '')),
         actionDueDate: existing.actionDueDate || incoming.actionDueDate || '',
         actionLogs:
           existing.actionLogs && existing.actionLogs.length > 0
@@ -382,7 +384,7 @@ export default function App() {
             tableName: p.tableName || 'Tour Experience',
             status: 'Pending',
             actionTaken: '',
-            actionOwner: 'Duty Manager',
+            actionOwner: p.actionOwner || '',
             actionDueDate: '',
           },
           `WB-${maxNum + 1 + idx}`
@@ -433,9 +435,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col font-sans antialiased text-slate-100">
-      {/* Top App Header */}
-      <Header firestoreConnected={firestoreConnected} itemCount={items.length} />
-
       {/* Main Content Area */}
       <main className="flex-1 w-full mx-auto">
         {/* Banner Notice with Smooth Fade-in & Fade-out */}
@@ -483,6 +482,7 @@ export default function App() {
             onUpdateItem={handleUpdateItem}
             onLoadDemoData={handleLoadDemoDataset}
             onClearData={handleClearData}
+            firestoreConnected={firestoreConnected}
           />
 
           {/* Single-Step Multi-Month Excel File Upload Section */}

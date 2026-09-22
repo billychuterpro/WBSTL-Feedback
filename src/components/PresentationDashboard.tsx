@@ -41,6 +41,7 @@ import {
   Layers,
   ArrowUpRight,
   ArrowDownRight,
+  Database,
 } from 'lucide-react';
 
 interface PresentationDashboardProps {
@@ -48,12 +49,14 @@ interface PresentationDashboardProps {
   onUpdateItem: (updated: FeedbackItem) => void;
   onLoadDemoData: () => void;
   onClearData?: () => void;
+  firestoreConnected?: boolean;
 }
 
 export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
   items,
   onUpdateItem,
   onLoadDemoData,
+  firestoreConnected = true,
 }) => {
   const [activeTab, setActiveTab] = useState<
     'visitor' | 'staff' | 'catering' | 'venues' | 'cases'
@@ -402,117 +405,143 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
 
   return (
     <div className="w-full bg-slate-950 text-slate-100 min-h-screen pb-16 font-sans">
-      {/* Presentation Top Header Navigation */}
-      <div className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400">
-              <Sparkles className="w-5 h-5" />
+      {/* Streamlined Unified Top Header & Navigation */}
+      <header className="border-b border-slate-800 bg-slate-900/95 backdrop-blur-md sticky top-0 z-30 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            {/* Left: Branding & Subtitle */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-slate-950 font-bold shadow-md shadow-amber-500/20 shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-base sm:text-lg font-bold tracking-tight text-white">
+                    Monthly Feedback Tracker & Action Register
+                  </h1>
+                  <span className="hidden sm:inline-block px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    Operations & Catering
+                  </span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono font-medium">
+                    {selectedMonth === 'ALL' ? 'All Months Combined' : selectedMonth}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 hidden sm:block">
+                  Aramark & Operations Executive Meeting Reporting & Case Tracking
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2 flex-wrap">
-                Monthly Visitor & Operations Feedback
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
-                  {selectedMonth === 'ALL' ? 'All Months Combined' : selectedMonth}
-                </span>
-              </h1>
-              <p className="text-xs text-slate-400">
-                Aramark & Operations Executive Meeting Presentation Deck
-              </p>
-            </div>
-          </div>
 
-          {/* Month Selector & Controls */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Dedicated Month Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-800/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs shadow-inner">
-              <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="text-slate-400 font-medium hidden sm:inline">Viewing Month:</span>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-amber-300 font-bold focus:outline-none cursor-pointer pr-1"
-              >
-                <option value="ALL" className="bg-slate-900 text-white">
-                  All Uploaded Months ({totalCasesAllMonths} cases)
-                </option>
-                {availableMonths.map((m) => (
-                  <option key={m.month} value={m.month} className="bg-slate-900 text-white">
-                    {m.month} ({m.count} cases)
+            {/* Right: Month Selector, Case Count & Firestore Status */}
+            <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-center">
+              {/* Dedicated Month Selector */}
+              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-700/80 rounded-lg px-2.5 py-1.5 text-xs shadow-inner">
+                <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-slate-400 font-medium hidden md:inline">Viewing Month:</span>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="bg-transparent text-amber-300 font-bold focus:outline-none cursor-pointer pr-1 text-xs"
+                >
+                  <option value="ALL" className="bg-slate-900 text-white">
+                    All Uploaded Months ({totalCasesAllMonths} cases)
                   </option>
-                ))}
-              </select>
-            </div>
+                  {availableMonths.map((m) => (
+                    <option key={m.month} value={m.month} className="bg-slate-900 text-white">
+                      {m.month} ({m.count} cases)
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="text-xs text-slate-400 pl-2 border-l border-slate-800 font-mono">
-              Month Cases: <strong className="text-amber-400">{activeCasesCount}</strong>
+              {/* Month Cases Badge */}
+              <div className="text-xs text-slate-300 bg-slate-800/80 border border-slate-700 px-2.5 py-1.5 rounded-lg font-mono">
+                Month Cases: <strong className="text-amber-400 font-bold">{activeCasesCount}</strong>
+              </div>
+
+              {/* Cloud Firestore Status */}
+              <span
+                id="firestore-cloud-status"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
+                  firestoreConnected
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                }`}
+                title={firestoreConnected ? 'Connected to Cloud Firestore Database' : 'Connecting to Cloud Firestore...'}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span className={`w-1.5 h-1.5 rounded-full ${firestoreConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                <span className="hidden sm:inline">{firestoreConnected ? 'Firestore Connected' : 'Connecting DB...'}</span>
+              </span>
             </div>
           </div>
         </div>
 
         {/* Slide Navigation Tabs */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 overflow-x-auto border-t border-slate-800/80 pt-1 pb-1">
-          <button
-            onClick={() => setActiveTab('visitor')}
-            className={`px-3.5 py-2 text-xs font-medium rounded-md transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'visitor'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <PieIcon className="w-3.5 h-3.5" />
-            Slide 1: Visitor Overview
-          </button>
+        <div className="border-t border-slate-800/80 bg-slate-950/40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 overflow-x-auto py-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              onClick={() => setActiveTab('visitor')}
+              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'visitor'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+              }`}
+            >
+              <PieIcon className="w-3.5 h-3.5" />
+              Slide 1: Visitor Overview
+            </button>
 
-          <button
-            onClick={() => setActiveTab('staff')}
-            className={`px-3.5 py-2 text-xs font-medium rounded-md transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'staff'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5" />
-            Slide 2: Staff Feedback
-          </button>
+            <button
+              onClick={() => setActiveTab('staff')}
+              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'staff'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Slide 2: Staff Feedback
+            </button>
 
-          <button
-            onClick={() => setActiveTab('catering')}
-            className={`px-3.5 py-2 text-xs font-medium rounded-md transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'catering'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Utensils className="w-3.5 h-3.5" />
-            Slide 3: Catering Overall
-          </button>
+            <button
+              onClick={() => setActiveTab('catering')}
+              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'catering'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+              }`}
+            >
+              <Utensils className="w-3.5 h-3.5" />
+              Slide 3: Catering Overall
+            </button>
 
-          <button
-            onClick={() => setActiveTab('venues')}
-            className={`px-3.5 py-2 text-xs font-medium rounded-md transition flex items-center gap-2 whitespace-nowrap ${
-              activeTab === 'venues'
-                ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            <Store className="w-3.5 h-3.5" />
-            Slide 4: Venue Breakdowns
-          </button>
+            <button
+              onClick={() => setActiveTab('venues')}
+              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'venues'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              Slide 4: Venue Breakdowns
+            </button>
 
-          <button
-            onClick={() => setActiveTab('cases')}
-            className={`px-3.5 py-2 text-xs font-medium rounded-md transition flex items-center gap-2 whitespace-nowrap ml-auto ${
-              activeTab === 'cases'
-                ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                : 'text-blue-400 hover:text-blue-300 bg-blue-950/40 border border-blue-800/50'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            Case Action Register & Comments ({activeCasesCount})
-          </button>
+            <button
+              onClick={() => setActiveTab('cases')}
+              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ml-auto ${
+                activeTab === 'cases'
+                  ? 'bg-blue-600 text-white font-bold shadow-sm'
+                  : 'text-blue-400 hover:text-blue-300 bg-blue-950/40 border border-blue-800/50 hover:bg-blue-900/50'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Case Action Register & Comments ({activeCasesCount})
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         {/* Zero Data Banner */}
@@ -1634,7 +1663,8 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                             setEditActionItem(null);
                           } else {
                             setExpandedCaseId(item.id);
-                            setEditActionItem({ ...item });
+                            const cleanOwner = item.actionOwner === 'Duty Manager' ? '' : (item.actionOwner || '');
+                            setEditActionItem({ ...item, actionOwner: cleanOwner });
                           }
                         }}
                         className="p-4 cursor-pointer flex flex-col md:flex-row md:items-start justify-between gap-3"
@@ -1793,7 +1823,7 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                 </label>
                                 <input
                                   type="text"
-                                  value={editActionItem.actionOwner || ''}
+                                  value={editActionItem.actionOwner === 'Duty Manager' ? '' : (editActionItem.actionOwner || '')}
                                   placeholder="e.g. Aramark Duty Manager"
                                   onChange={(e) =>
                                     setEditActionItem({
