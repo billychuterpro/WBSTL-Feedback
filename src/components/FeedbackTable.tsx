@@ -74,12 +74,22 @@ export const FeedbackTable: React.FC<FeedbackTableProps> = ({
 
   const updateEditState = (id: string, field: string, val: any, item: FeedbackItem) => {
     const current = getEditState(item);
+    const updated = {
+      ...current,
+      [field]: val,
+    };
+    if (field === 'status') {
+      if (val === 'Resolved') {
+        if (!updated.actionDueDate) {
+          updated.actionDueDate = new Date().toISOString().slice(0, 10);
+        }
+      } else {
+        updated.actionDueDate = '';
+      }
+    }
     setRowEdits((prev) => ({
       ...prev,
-      [id]: {
-        ...current,
-        [field]: val,
-      },
+      [id]: updated,
     }));
   };
 
@@ -362,7 +372,7 @@ export const FeedbackTable: React.FC<FeedbackTableProps> = ({
                       />
 
                       <label className="block font-semibold text-slate-700 mt-2 mb-1 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-500" /> Target Due Date:
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" /> Resolution Date:
                       </label>
                       <input
                         type="date"

@@ -63,3 +63,41 @@ export interface ParsedPreviewItem {
 
 export type StorageMode = 'simulation' | 'gas_endpoint';
 
+export interface VenueSatisfactionScore {
+  venue: string;
+  score: number;
+  vsLY?: string;
+}
+
+export interface ExecutiveMonthlyReport {
+  id: string; // e.g. "July 2026"
+  monthYear: string; // e.g. "July 2026"
+  feedbackVolume: number;
+  feedbackVolumeVsLY?: string;
+  staffComplaints: number;
+  staffComplaintsVsLY?: string;
+  staffCompliments: number;
+  staffComplimentsVsLY?: string;
+  staffThankYous: number;
+  staffThankYousVsLY?: string;
+  mysteryShopVisit1?: number;
+  mysteryShopVisit1VsLY?: string;
+  mysteryShopVisit2?: number;
+  mysteryShopVisit2VsLY?: string;
+  mysteryShopMonthlyAvg?: number;
+  mysteryShopMonthlyAvgVsLY?: string;
+  venueSatisfaction: VenueSatisfactionScore[];
+  staffRating?: number;
+  staffRatingVsLY?: string;
+  cateringVFM?: number;
+  cateringVFMVsLY?: string;
+  keyComments: string[];
+  actions: string[];
+  yoyTrend?: {
+    month: string;
+    score2025?: number;
+    score2026?: number;
+  }[];
+  updatedAt?: string;
+}
+

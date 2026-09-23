@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { FeedbackItem, FeedbackStatus } from '../types';
+import { FeedbackItem, FeedbackStatus, ExecutiveMonthlyReport } from '../types';
+import { initialExecReports } from '../data/initialExecReports';
+import { ExecReportUploaderModal } from './ExecReportUploaderModal';
+import { MysteryShopSlide } from './MysteryShopSlide';
+import { BdrcYtdSlide } from './BdrcYtdSlide';
 import { DonutChart } from './DonutChart';
 import {
   isComplaintType,
@@ -42,6 +46,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Database,
+  FileText,
+  Upload,
 } from 'lucide-react';
 
 interface PresentationDashboardProps {
@@ -50,6 +56,8 @@ interface PresentationDashboardProps {
   onLoadDemoData: () => void;
   onClearData?: () => void;
   firestoreConnected?: boolean;
+  execReports?: ExecutiveMonthlyReport[];
+  onSaveExecReport?: (report: ExecutiveMonthlyReport) => void;
 }
 
 export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
@@ -57,10 +65,14 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
   onUpdateItem,
   onLoadDemoData,
   firestoreConnected = true,
+  execReports = initialExecReports,
+  onSaveExecReport = () => {},
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'visitor' | 'staff' | 'catering' | 'venues' | 'cases'
+    'visitor' | 'staff' | 'catering' | 'venues' | 'bdrc_month' | 'bdrc_ytd' | 'cases'
   >('visitor');
+
+  const [isExecModalOpen, setIsExecModalOpen] = useState(false);
 
   // Month Selection State
   const availableMonths = useMemo(() => {
@@ -109,6 +121,18 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
     if (!priorYearMonthName) return [];
     return items.filter((i) => (i.monthYear || getMonthYearFromDate(i.date)) === priorYearMonthName);
   }, [items, priorYearMonthName]);
+
+  // Active Executive Monthly Report matching selectedMonth (or null if no data uploaded)
+  const activeExecReport = useMemo<ExecutiveMonthlyReport | null>(() => {
+    if (!execReports || execReports.length === 0) return null;
+    if (selectedMonth !== 'ALL') {
+      const match = execReports.find(
+        (r) => r.monthYear.toLowerCase() === selectedMonth.toLowerCase()
+      );
+      return match || null;
+    }
+    return execReports[0] || null;
+  }, [execReports, selectedMonth]);
 
   // Dynamic YoY & MoM rate for overall cases
   const yoyCasesPct = useMemo(() => {
@@ -479,66 +503,98 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
 
         {/* Slide Navigation Tabs */}
         <div className="border-t border-slate-800/80 bg-slate-950/40">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1.5 overflow-x-auto py-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              onClick={() => setActiveTab('visitor')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'visitor'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <PieIcon className="w-3.5 h-3.5" />
-              Slide 1: Visitor Overview
-            </button>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center overflow-x-auto py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex items-center gap-2 min-w-max w-full justify-between pr-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setActiveTab('visitor')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      activeTab === 'visitor'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <PieIcon className="w-3.5 h-3.5" />
+                    Visitor Overview
+                  </button>
 
-            <button
-              onClick={() => setActiveTab('staff')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'staff'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              Slide 2: Staff Feedback
-            </button>
+                  <button
+                    onClick={() => setActiveTab('staff')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      activeTab === 'staff'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Staff Feedback
+                  </button>
 
-            <button
-              onClick={() => setActiveTab('catering')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'catering'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <Utensils className="w-3.5 h-3.5" />
-              Slide 3: Catering Overall
-            </button>
+                  <button
+                    onClick={() => setActiveTab('catering')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      activeTab === 'catering'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <Utensils className="w-3.5 h-3.5" />
+                    Catering Overall
+                  </button>
 
-            <button
-              onClick={() => setActiveTab('venues')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'venues'
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-              }`}
-            >
-              <Store className="w-3.5 h-3.5" />
-              Slide 4: Venue Breakdowns
-            </button>
+                  <button
+                    onClick={() => setActiveTab('venues')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      activeTab === 'venues'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    Venue Breakdowns
+                  </button>
 
-            <button
-              onClick={() => setActiveTab('cases')}
-              className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-2 whitespace-nowrap ml-auto ${
-                activeTab === 'cases'
-                  ? 'bg-blue-600 text-white font-bold shadow-sm'
-                  : 'text-blue-400 hover:text-blue-300 bg-blue-950/40 border border-blue-800/50 hover:bg-blue-900/50'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              Case Action Register & Comments ({activeCasesCount})
-            </button>
+                  <button
+                    onClick={() => setActiveTab('bdrc_month')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      activeTab === 'bdrc_month'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    BDRC Data Month
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('bdrc_ytd')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                      activeTab === 'bdrc_ytd'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
+                    }`}
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    BDRC YTD
+                  </button>
+                </div>
+
+                <div className="flex items-center pl-2 shrink-0 ml-auto">
+                  <button
+                    onClick={() => setActiveTab('cases')}
+                    className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-2 whitespace-nowrap shrink-0 ${
+                      activeTab === 'cases'
+                        ? 'bg-blue-600 text-white font-bold shadow-sm'
+                        : 'text-blue-400 hover:text-blue-300 bg-blue-950/50 border border-blue-800/60 hover:bg-blue-900/60'
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Case Register & Actions ({activeCasesCount})
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -582,92 +638,62 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
               </p>
             </div>
 
-            {/* Top Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
-              <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/40 shadow-lg text-center">
-                <span className="text-xs uppercase font-medium text-slate-400 tracking-wider">
-                  Cases Received
-                </span>
-                <div className="text-3xl font-extrabold text-white my-1">
-                  {activeCasesCount}
-                </div>
-                <div className="text-xs text-amber-400 font-semibold">
-                  {yoyCasesPct ? (
-                    <span className="flex items-center justify-center gap-0.5">
-                      <ArrowUpRight className="w-3 h-3" /> ({yoyCasesPct} vs. {priorYearMonthName})
-                    </span>
-                  ) : momCasesPct ? (
-                    <span>({momCasesPct} vs. {priorMonthName})</span>
-                  ) : (
-                    <span>({activeCasesCount > 0 ? (selectedMonth === 'ALL' ? 'Total' : selectedMonth) : 'No records'})</span>
-                  )}
+            {/* KPI Cards Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-lg text-center flex flex-col justify-between">
+                <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">CASES RECEIVED</span>
+                <div className="text-3xl font-extrabold text-white my-1 font-mono">{activeCasesCount}</div>
+                <div className="text-[11px] text-amber-400 font-medium">
+                  {momCasesPct ? `(${momCasesPct} vs. ${priorMonthName})` : yoyCasesPct ? `(${yoyCasesPct} vs. ${priorYearMonthName})` : 'Total Active Cases'}
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/40 shadow-lg text-center">
-                <span className="text-xs uppercase font-medium text-slate-400 tracking-wider">
-                  Cases Closed
-                </span>
-                <div className="text-3xl font-extrabold text-white my-1">
-                  {resolvedCount}
-                </div>
-                <div className="text-xs text-emerald-400 font-semibold">
-                  {activeCasesCount > 0 ? `(${Math.round((resolvedCount / activeCasesCount) * 100)}% resolved/closed)` : 'No records'}
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-lg text-center flex flex-col justify-between">
+                <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">CASES CLOSED</span>
+                <div className="text-3xl font-extrabold text-white my-1 font-mono">{resolvedCount}</div>
+                <div className="text-[11px] text-emerald-400 font-medium">
+                  ({activeCasesCount > 0 ? Math.round((resolvedCount / activeCasesCount) * 100) : 0}% resolved/closed)
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/40 shadow-lg text-center">
-                <span className="text-xs uppercase font-medium text-slate-400 tracking-wider">
-                  Open Actions
-                </span>
-                <div className="text-3xl font-extrabold text-amber-300 my-1">
-                  {pendingCount + inProgressCount}
-                </div>
-                <div className="text-xs text-slate-400">
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-lg text-center flex flex-col justify-between">
+                <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">OPEN ACTIONS</span>
+                <div className="text-3xl font-extrabold text-amber-400 my-1 font-mono">{inProgressCount + pendingCount}</div>
+                <div className="text-[11px] text-slate-400">
                   ({inProgressCount} in progress, {pendingCount} pending)
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/60 shadow-lg text-center bg-amber-500/5">
-                <span className="text-xs uppercase font-medium text-amber-400 tracking-wider">
-                  Complaints
-                </span>
-                <div className="text-2xl font-extrabold text-rose-400 my-1">
-                  {complaintCount}
-                </div>
-                <div className="text-[11px] text-slate-300">
-                  {activeCasesCount > 0 ? `${((complaintCount / activeCasesCount) * 100).toFixed(1)}% of volume` : '0%'}
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-lg text-center flex flex-col justify-between">
+                <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">COMPLAINTS</span>
+                <div className="text-3xl font-extrabold text-rose-500 my-1 font-mono">{complaintCount}</div>
+                <div className="text-[11px] text-slate-400">
+                  {activeCasesCount > 0 ? ((complaintCount / activeCasesCount) * 100).toFixed(1) : 0}% of volume
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/60 shadow-lg text-center bg-emerald-500/5 col-span-2 md:col-span-1">
-                <span className="text-xs uppercase font-medium text-emerald-400 tracking-wider">
-                  Praise & Compliments
-                </span>
-                <div className="text-2xl font-extrabold text-emerald-300 my-1">
-                  {complimentCount + thankYouCount}
+              <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/50 shadow-lg text-center col-span-2 sm:col-span-1 flex flex-col justify-between">
+                <span className="text-xs uppercase font-semibold text-emerald-400 tracking-wider">PRAISE & COMPLIMENTS</span>
+                <div className="text-3xl font-extrabold text-emerald-400 my-1 font-mono">{complimentCount + thankYouCount}</div>
+                <div className="text-[11px] text-slate-400">
+                  <div>{activeCasesCount > 0 ? (((complimentCount + thankYouCount) / activeCasesCount) * 100).toFixed(1) : 0}% positive</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">{complimentCount} compliments · {thankYouCount} thank you</div>
                 </div>
-                <div className="text-[11px] text-slate-300">
-                  {activeCasesCount > 0 ? `${(((complimentCount + thankYouCount) / activeCasesCount) * 100).toFixed(1)}% positive` : '0%'}
-                </div>
-                {(complimentCount > 0 || thankYouCount > 0) && (
-                  <div className="text-[10px] text-emerald-400 font-medium mt-1">
-                    {complimentCount} compliments · {thankYouCount} thank you
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Slide 1 Charts Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
               {/* Left Bar Chart */}
               <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col justify-between">
-                <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
-                  <BarChart2 className="w-4 h-4 text-amber-400" />
-                  Visitor Feedback Type Volume ({selectedMonth === 'ALL' ? 'All Months' : selectedMonth})
-                </h3>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300 mb-1 flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-amber-400" />
+                    Visitor Feedback Type Volume ({selectedMonth === 'ALL' ? 'All Months' : selectedMonth})
+                  </h3>
+                </div>
 
-                <div className="space-y-4 my-auto pt-4">
+                <div className="space-y-4 my-auto py-2">
                   {/* Complaint */}
                   <div>
                     <div className="flex justify-between text-xs font-medium mb-1.5">
@@ -771,9 +797,14 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
 
               {/* Right Donut Distribution */}
               <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col justify-between">
-                <h3 className="text-sm font-semibold text-slate-300 mb-2">
-                  Feedback Share Distribution
-                </h3>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-300 mb-1">
+                    Feedback Share Distribution
+                  </h3>
+                  <p className="text-xs text-slate-400 mb-2">
+                    Proportional split of sentiment across all {activeCasesCount} cases
+                  </p>
+                </div>
 
                 <div className="flex items-center justify-around py-4">
                   <DonutChart
@@ -1213,13 +1244,21 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
         {/* SLIDE 4: VENUE BREAKDOWNS */}
         {activeTab === 'venues' && (
           <div className="space-y-6">
-            <div className="text-center py-2 border-b border-slate-800 mb-4">
-              <h2 className="text-2xl font-serif font-bold text-slate-100 tracking-wide">
-                Catering - Venue Breakdowns ({selectedMonth === 'ALL' ? 'All Months' : selectedMonth})
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Click any venue card below to inspect and record actions for its specific complaints in the Action Register.
-              </p>
+            <div className="text-center py-2 border-b border-slate-800 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="text-left">
+                <h2 className="text-2xl font-serif font-bold text-slate-100 tracking-wide">
+                  Catering - Venue Breakdowns ({selectedMonth === 'ALL' ? 'All Months' : selectedMonth})
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Click any venue card below to inspect and record actions for its specific complaints in the Action Register.
+                </p>
+              </div>
+              {activeExecReport && (
+                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs text-amber-300 shrink-0">
+                  <Award className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Research Benchmark: <strong>{activeExecReport.monthYear}</strong></span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1261,7 +1300,14 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
               {/* The Hogwarts Table */}
               <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 shadow-xl space-y-3 transition">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h3 className="font-bold text-slate-200 text-sm">The Hogwarts Table</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-200 text-sm">The Hogwarts Table</h3>
+                    {activeExecReport?.venueSatisfaction?.find(v => v.venue.toLowerCase().includes('hogwarts')) && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold font-mono">
+                        Research: {activeExecReport.venueSatisfaction.find(v => v.venue.toLowerCase().includes('hogwarts'))?.score}%
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-emerald-400 font-mono">
                     {hogwartsTableStats.total} Feedback ({cateringItems.length > 0 ? Math.round((hogwartsTableStats.total / cateringItems.length) * 100) : 0}% of Catering)
                   </span>
@@ -1296,7 +1342,14 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
               {/* Backlot Cafe */}
               <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-blue-500/50 shadow-xl space-y-3 transition">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h3 className="font-bold text-slate-200 text-sm">Backlot Café</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-200 text-sm">Backlot Café</h3>
+                    {activeExecReport?.venueSatisfaction?.find(v => v.venue.toLowerCase().includes('backlot')) && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-bold font-mono">
+                        Research: {activeExecReport.venueSatisfaction.find(v => v.venue.toLowerCase().includes('backlot'))?.score}% ({activeExecReport.venueSatisfaction.find(v => v.venue.toLowerCase().includes('backlot'))?.vsLY})
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-blue-400 font-mono">
                     {backlotStats.total} Feedback ({cateringItems.length > 0 ? Math.round((backlotStats.total / cateringItems.length) * 100) : 0}% of Catering)
                   </span>
@@ -1331,7 +1384,14 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
               {/* Food Hall & Other F&B */}
               <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-yellow-500/50 shadow-xl space-y-3 transition">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h3 className="font-bold text-slate-200 text-sm">Food Hall & Other Outlets</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-slate-200 text-sm">Food Hall & Outlets</h3>
+                    {activeExecReport?.venueSatisfaction?.find(v => v.venue.toLowerCase().includes('food hall')) && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono">
+                        Research: {activeExecReport.venueSatisfaction.find(v => v.venue.toLowerCase().includes('food hall'))?.score}% ({activeExecReport.venueSatisfaction.find(v => v.venue.toLowerCase().includes('food hall'))?.vsLY})
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-yellow-400 font-mono">
                     {foodHallStats.total} Feedback
                   </span>
@@ -1391,6 +1451,23 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* SLIDE 5: BDRC DATA MONTH */}
+        {activeTab === 'bdrc_month' && (
+          <MysteryShopSlide
+            report={activeExecReport}
+            selectedMonth={selectedMonth}
+            onOpenUploadModal={() => setIsExecModalOpen(true)}
+          />
+        )}
+
+        {/* SLIDE 6: BDRC YTD (YEAR-TO-DATE) */}
+        {activeTab === 'bdrc_ytd' && (
+          <BdrcYtdSlide
+            reports={execReports}
+            onOpenUploadModal={() => setIsExecModalOpen(true)}
+          />
         )}
 
         {/* CASE ACTION REGISTER & COMMENTS TAB */}
@@ -1797,6 +1874,8 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                   }
                                   onChange={(e) => {
                                     const nextStatus = e.target.value as FeedbackStatus;
+                                    const isClosing = nextStatus === 'Resolved';
+                                    const todayStr = new Date().toISOString().slice(0, 10);
                                     setEditActionItem({
                                       ...editActionItem,
                                       status: nextStatus,
@@ -1806,6 +1885,9 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                           : nextStatus === 'Pending'
                                           ? 'Pending Review'
                                           : 'Open',
+                                      actionDueDate: isClosing
+                                        ? (editActionItem.actionDueDate || todayStr)
+                                        : '',
                                     });
                                   }}
                                   className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
@@ -1856,10 +1938,10 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                                 />
                               </div>
 
-                              {/* Target Resolution Due Date */}
+                              {/* Resolution Date */}
                               <div>
                                 <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                                  Target Resolution Date
+                                  Resolution Date
                                 </label>
                                 <input
                                   type="date"
@@ -1925,6 +2007,15 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Ingestion & Executive Review Modal */}
+      <ExecReportUploaderModal
+        isOpen={isExecModalOpen}
+        onClose={() => setIsExecModalOpen(false)}
+        onSaveReport={onSaveExecReport}
+        currentMonthHint={selectedMonth === 'ALL' ? 'July 2026' : selectedMonth}
+        existingReport={activeExecReport}
+      />
     </div>
   );
 };

@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ExcelUploader } from './components/ExcelUploader';
 import { PresentationDashboard } from './components/PresentationDashboard';
 
-import { ExcelMappingConfig, FeedbackItem, FeedbackStatus } from './types';
+import { ExcelMappingConfig, FeedbackItem, FeedbackStatus, ExecutiveMonthlyReport } from './types';
 import { DEFAULT_EXCEL_CONFIG, DEMO_AUGUST_2026_ITEMS } from './data/initialData';
+import { initialExecReports } from './data/initialExecReports';
 import {
   isComplaintType,
   isComplaintItem,
@@ -254,6 +255,42 @@ export default function App() {
     return initialDemo;
   });
 
+  const [execReports, setExecReports] = useState<ExecutiveMonthlyReport[]>(() => {
+    // Clean out old placeholder storage keys if any
+    try {
+      localStorage.removeItem('exec_monthly_reports_v1');
+      localStorage.removeItem('exec_monthly_reports_v2');
+    } catch (e) {}
+
+    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v4');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return initialExecReports; // []
+  });
+
+  const handleSaveExecReport = (report: ExecutiveMonthlyReport) => {
+    setExecReports((prev) => {
+      const idx = prev.findIndex((r) => r.monthYear.toLowerCase() === report.monthYear.toLowerCase());
+      let next: ExecutiveMonthlyReport[];
+      if (idx >= 0) {
+        next = [...prev];
+        next[idx] = report;
+      } else {
+        next = [report, ...prev];
+      }
+      localStorage.setItem('bdrc_user_uploaded_reports_v4', JSON.stringify(next));
+      return next;
+    });
+    setBannerNotice({
+      msg: `Official BDRC Catering report for ${report.monthYear} saved and updated across dashboard.`,
+      type: 'success',
+    });
+  };
+
   const [isLoading, setIsLoading] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ msg: string; type: 'success' | 'info' | 'error' } | null>(() => {
     return {
@@ -344,14 +381,16 @@ export default function App() {
 
   const handleClearData = async () => {
     setItems([]);
+    setExecReports([]);
     localStorage.setItem('gas_feedback_items_v4', JSON.stringify([]));
+    localStorage.removeItem('bdrc_user_uploaded_reports_v4');
     try {
       await clearAllFirestoreFeedbackItems();
     } catch (e) {
       console.error('Failed to clear Firestore:', e);
     }
     setBannerNotice({
-      msg: 'All feedback records cleared from Cloud Firestore and local cache.',
+      msg: 'All feedback records and BDRC reports cleared.',
       type: 'info',
     });
   };
@@ -483,6 +522,8 @@ export default function App() {
             onLoadDemoData={handleLoadDemoDataset}
             onClearData={handleClearData}
             firestoreConnected={firestoreConnected}
+            execReports={execReports}
+            onSaveExecReport={handleSaveExecReport}
           />
 
           {/* Single-Step Multi-Month Excel File Upload Section */}
