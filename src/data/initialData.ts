@@ -1,4 +1,5 @@
 import { ExcelMappingConfig, FeedbackItem } from "../types";
+import { generateMonthlyFeedbackItems } from "./monthlyFeedbackData";
 
 export const DEFAULT_EXCEL_CONFIG: ExcelMappingConfig = {
   "startRow": 1,
@@ -1382,4 +1383,9 @@ export const DEMO_AUGUST_2026_ITEMS: FeedbackItem[] = [
     "status": "Resolved",
     "actionLogs": []
   }
+];
+
+export const DEMO_ALL_MONTHS_ITEMS: FeedbackItem[] = [
+  ...DEMO_AUGUST_2026_ITEMS,
+  ...generateMonthlyFeedbackItems(),
 ];

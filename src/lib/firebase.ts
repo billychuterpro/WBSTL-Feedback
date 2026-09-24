@@ -218,3 +218,64 @@ export async function clearAllFirestoreFeedbackItems(): Promise<void> {
     await batch.commit();
   }
 }
+
+const EXEC_REPORTS_COLLECTION = 'exec_monthly_reports';
+
+/**
+ * Real-time listener for all executive BDRC monthly reports from Cloud Firestore
+ */
+export function subscribeToExecReports(
+  onUpdate: (reports: any[]) => void,
+  onError?: (err: Error) => void
+) {
+  const collRef = collection(db, EXEC_REPORTS_COLLECTION);
+  return onSnapshot(
+    collRef,
+    (snapshot) => {
+      const results: any[] = [];
+      snapshot.forEach((docSnap) => {
+        results.push(docSnap.data());
+      });
+      onUpdate(results);
+    },
+    (err) => {
+      console.warn('Firestore exec reports subscription error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Save / update an Executive BDRC Monthly Report to Cloud Firestore
+ */
+export async function saveExecReportToFirestore(report: any): Promise<void> {
+  const docId = (report.monthYear || report.id || '').trim().toLowerCase().replace(/\s+/g, '_');
+  if (!docId) return;
+  const docRef = doc(db, EXEC_REPORTS_COLLECTION, docId);
+  const cleanData = {
+    ...report,
+    id: report.monthYear || report.id,
+    monthYear: report.monthYear || report.id,
+    updatedAt: Date.now(),
+  };
+  await setDoc(docRef, cleanData, { merge: true });
+}
+
+/**
+ * Clear all executive reports from Cloud Firestore
+ */
+export async function clearAllFirestoreExecReports(): Promise<void> {
+  const collRef = collection(db, EXEC_REPORTS_COLLECTION);
+  const snapshot = await getDocs(collRef);
+  const CHUNK_SIZE = 400;
+  const docs = snapshot.docs;
+
+  for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+    const chunk = docs.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    for (const docSnap of chunk) {
+      batch.delete(docSnap.ref);
+    }
+    await batch.commit();
+  }
+}

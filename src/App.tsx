@@ -4,7 +4,7 @@ import { ExcelUploader } from './components/ExcelUploader';
 import { PresentationDashboard } from './components/PresentationDashboard';
 
 import { ExcelMappingConfig, FeedbackItem, FeedbackStatus, ExecutiveMonthlyReport } from './types';
-import { DEFAULT_EXCEL_CONFIG, DEMO_AUGUST_2026_ITEMS } from './data/initialData';
+import { DEFAULT_EXCEL_CONFIG, DEMO_AUGUST_2026_ITEMS, DEMO_ALL_MONTHS_ITEMS } from './data/initialData';
 import { initialExecReports } from './data/initialExecReports';
 import {
   isComplaintType,
@@ -221,11 +221,12 @@ export default function App() {
     localStorage.removeItem('gas_feedback_items_v5');
     localStorage.removeItem('gas_feedback_items_v6');
     localStorage.removeItem('gas_feedback_items_v7');
+    localStorage.removeItem('gas_feedback_items_v8');
   }, []);
 
-  // Default to stored items or canonical DEMO_AUGUST_2026_ITEMS
+  // Default to stored items or full DEMO_ALL_MONTHS_ITEMS
   const [items, setItems] = useState<FeedbackItem[]>(() => {
-    const saved = localStorage.getItem('gas_feedback_items_v8');
+    const saved = localStorage.getItem('gas_feedback_items_v9');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -239,37 +240,46 @@ export default function App() {
             return true;
           });
           const mapped = filtered.map((it: any, idx: number) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`));
-          // Ensure all 17 canonical August complaints and strict 72 cases are reconciled
+          // Ensure all canonical items across months are reconciled
           const { merged } = mergeAndDeduplicateItems(
             mapped,
-            DEMO_AUGUST_2026_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`))
+            DEMO_ALL_MONTHS_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`))
           );
           const cleaned = filterOutSpuriousAugustItems(merged);
-          localStorage.setItem('gas_feedback_items_v8', JSON.stringify(cleaned));
+          localStorage.setItem('gas_feedback_items_v9', JSON.stringify(cleaned));
           return cleaned;
         }
       } catch (e) {}
     }
-    const initialDemo = DEMO_AUGUST_2026_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`));
-    localStorage.setItem('gas_feedback_items_v8', JSON.stringify(initialDemo));
+    const initialDemo = DEMO_ALL_MONTHS_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`));
+    localStorage.setItem('gas_feedback_items_v9', JSON.stringify(initialDemo));
     return initialDemo;
   });
 
   const [execReports, setExecReports] = useState<ExecutiveMonthlyReport[]>(() => {
-    // Clean out old placeholder storage keys if any
     try {
       localStorage.removeItem('exec_monthly_reports_v1');
       localStorage.removeItem('exec_monthly_reports_v2');
+      localStorage.removeItem('bdrc_user_uploaded_reports_v3');
+      localStorage.removeItem('bdrc_user_uploaded_reports_v4');
     } catch (e) {}
 
-    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v4');
+    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v5');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const reportMap = new Map(initialExecReports.map((r) => [r.monthYear.toLowerCase(), r]));
+          // User edited reports override defaults
+          parsed.forEach((userR: ExecutiveMonthlyReport) => {
+            reportMap.set(userR.monthYear.toLowerCase(), userR);
+          });
+          return Array.from(reportMap.values());
+        }
       } catch (e) {}
     }
-    return initialExecReports; // []
+    localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(initialExecReports));
+    return initialExecReports;
   });
 
   const handleSaveExecReport = (report: ExecutiveMonthlyReport) => {
@@ -282,7 +292,7 @@ export default function App() {
       } else {
         next = [report, ...prev];
       }
-      localStorage.setItem('bdrc_user_uploaded_reports_v4', JSON.stringify(next));
+      localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(next));
       return next;
     });
     setBannerNotice({
@@ -294,7 +304,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ msg: string; type: 'success' | 'info' | 'error' } | null>(() => {
     return {
-      msg: 'August 2026 catering dataset verified (72 cases: 17 complaints open, 55 praise & compliments closed). Connected to Cloud Firestore.',
+      msg: 'Official 2026 catering monthly reports (January - August) loaded with verified BDRC scores and mystery shop results.',
       type: 'success',
     };
   });
@@ -361,9 +371,9 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [bannerNotice]);
 
-  // Handle loading August 2026 meeting dataset with deduplication & Firestore sync
+  // Handle loading full 2026 meeting dataset with deduplication & Firestore sync
   const handleLoadDemoDataset = async () => {
-    const sanitizedDemo = DEMO_AUGUST_2026_ITEMS.map((it, idx) =>
+    const sanitizedDemo = DEMO_ALL_MONTHS_ITEMS.map((it, idx) =>
       sanitizeFeedbackItem(it, `WB-${3050000 + idx}`)
     );
     const { merged, addedCount, updatedCount } = mergeAndDeduplicateItems(items, sanitizedDemo);

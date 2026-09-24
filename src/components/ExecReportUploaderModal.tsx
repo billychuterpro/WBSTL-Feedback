@@ -18,6 +18,7 @@ import {
   Check
 } from 'lucide-react';
 import { ExecutiveMonthlyReport } from '../types';
+import { initialExecReports } from '../data/initialExecReports';
 import { renderPdfPageToImage, parsePastedReportText } from '../utils/pdfReportParser';
 
 interface ExecReportUploaderModalProps {
@@ -280,8 +281,12 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
     setActiveTab('manual');
   };
 
-  const handleLoadOfficialPreset = () => {
-    const preset = getJuly2026OfficialPreset();
+  const handleLoadOfficialPreset = (targetMonth?: string) => {
+    const month = targetMonth || currentMonthHint || 'August 2026';
+    const found = initialExecReports.find(
+      (r) => r.monthYear.toLowerCase() === month.toLowerCase()
+    );
+    const preset = found || initialExecReports[0] || getJuly2026OfficialPreset();
     setFormData(preset);
     setExtractSuccess(true);
     setActiveTab('manual');
@@ -415,26 +420,45 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
             <div className="space-y-6">
               
               {/* Quick Preset Banner */}
-              <div className="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400">
-                    <Sparkles className="w-5 h-5" />
+              <div className="bg-gradient-to-r from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/30 rounded-xl p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-white">Load Official BDRC Dataset Presets</h5>
+                      <p className="text-[11px] text-slate-300">
+                        100% verified mystery shop visits, scores, comments & agreed actions across 2026:
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h5 className="text-xs font-bold text-white">Need immediate 100% verified data?</h5>
-                    <p className="text-[11px] text-slate-300">
-                      Instantly load the exact <strong>July 2026 BDRC Official Dataset</strong> (Volume 78, Mystery Shop 91%, All Venues):
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadOfficialPreset(currentMonthHint)}
+                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition shrink-0 shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Load Active ({currentMonthHint})
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleLoadOfficialPreset}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition shrink-0 shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Load July 2026 Preset (100% Accurate)
-                </button>
+                <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-800">
+                  <span className="text-[11px] text-slate-400 font-semibold mr-1">Select Month:</span>
+                  {initialExecReports.map((p) => (
+                    <button
+                      key={p.monthYear}
+                      type="button"
+                      onClick={() => handleLoadOfficialPreset(p.monthYear)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition border ${
+                        formData.monthYear === p.monthYear
+                          ? 'bg-amber-500 text-slate-950 border-amber-400'
+                          : 'bg-slate-950/80 hover:bg-amber-500/20 text-amber-300 border-slate-700 hover:border-amber-500/50'
+                      }`}
+                    >
+                      {p.monthYear}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Dropzone */}
@@ -572,10 +596,10 @@ Operational Actions:
                   </div>
                   <button
                     type="button"
-                    onClick={handleLoadOfficialPreset}
+                    onClick={() => handleLoadOfficialPreset(formData.monthYear)}
                     className="text-[11px] text-amber-300 hover:underline"
                   >
-                    Reset to July 2026 Preset
+                    Reset to {formData.monthYear || 'Verified'} Preset
                   </button>
                 </div>
               )}

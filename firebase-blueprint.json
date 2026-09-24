@@ -1,26 +1,74 @@
 {
-  "entities": [
-    {
-      "name": "FeedbackItem",
-      "collectionName": "feedback_items",
+  "entities": {
+    "FeedbackItem": {
+      "title": "FeedbackItem",
       "description": "Customer feedback records including WB cases, category classification, and action tracking.",
-      "fields": [
-        { "name": "id", "type": "string", "description": "Unique record ID / case number" },
-        { "name": "caseNumber", "type": "string", "description": "WB or FB Case number" },
-        { "name": "caseStatus", "type": "string", "description": "Case lifecycle status (Closed, Open, etc.)" },
-        { "name": "date", "type": "string", "description": "Visit date (ISO YYYY-MM-DD)" },
-        { "name": "monthYear", "type": "string", "description": "Month-Year partition string (e.g. August 2026)" },
-        { "name": "type", "type": "string", "description": "Feedback categorization (Complaint, Compliment, Thank You, Suggestion)" },
-        { "name": "department", "type": "string", "description": "Department code / name" },
-        { "name": "venue", "type": "string", "description": "Venue / location" },
-        { "name": "tableName", "type": "string", "description": "Report table / section" },
-        { "name": "feedbackDetail", "type": "string", "description": "Detailed customer feedback text" },
-        { "name": "status", "type": "string", "description": "Action item status (Pending, In Progress, Resolved)" },
-        { "name": "actionTaken", "type": "string", "description": "Action log / resolution notes" },
-        { "name": "actionOwner", "type": "string", "description": "Assigned action owner" },
-        { "name": "actionDueDate", "type": "string", "description": "Action target due date" },
-        { "name": "updatedAt", "type": "number", "description": "Timestamp of last modification" }
-      ]
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique record ID / case number" },
+        "caseNumber": { "type": "string", "description": "WB or FB Case number" },
+        "caseStatus": { "type": "string", "description": "Case lifecycle status" },
+        "date": { "type": "string", "description": "Visit date" },
+        "monthYear": { "type": "string", "description": "Month-Year string" },
+        "type": { "type": "string", "description": "Feedback categorization" },
+        "department": { "type": "string", "description": "Department name" },
+        "venue": { "type": "string", "description": "Venue / location" },
+        "tableName": { "type": "string", "description": "Report table" },
+        "feedbackDetail": { "type": "string", "description": "Feedback detail text" },
+        "status": { "type": "string", "description": "Action item status" },
+        "actionTaken": { "type": "string", "description": "Action resolution notes" },
+        "actionOwner": { "type": "string", "description": "Assigned action owner" },
+        "actionDueDate": { "type": "string", "description": "Target due date" },
+        "updatedAt": { "type": "number", "description": "Timestamp of modification" }
+      },
+      "required": ["id", "caseNumber", "caseStatus", "date", "tableName"]
+    },
+    "ExecMonthlyReport": {
+      "title": "ExecMonthlyReport",
+      "description": "Executive BDRC monthly reports with mystery shopping scores and operational actions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Report identifier or monthYear" },
+        "monthYear": { "type": "string", "description": "Target month and year" },
+        "feedbackVolume": { "type": "number", "description": "Total feedback volume" },
+        "feedbackVolumeVsLY": { "type": "string", "description": "Feedback volume comparison" },
+        "staffComplaints": { "type": "number", "description": "Staff complaints count" },
+        "staffComplaintsVsLY": { "type": "string", "description": "Complaints comparison vs LY" },
+        "staffCompliments": { "type": "number", "description": "Staff compliments count" },
+        "staffComplimentsVsLY": { "type": "string", "description": "Compliments comparison vs LY" },
+        "staffThankYous": { "type": "number", "description": "Staff thank you count" },
+        "staffThankYousVsLY": { "type": "string", "description": "Thank you comparison vs LY" },
+        "mysteryShopVisit1": { "type": "number", "description": "Mystery shop visit 1 score" },
+        "mysteryShopVisit2": { "type": "number", "description": "Mystery shop visit 2 score" },
+        "mysteryShopMonthlyAvg": { "type": "number", "description": "Mystery shop average score" },
+        "staffRating": { "type": "number", "description": "Staff rating percentage" },
+        "cateringVFM": { "type": "number", "description": "Catering value for money score" },
+        "updatedAt": { "type": "number", "description": "Last update timestamp" }
+      },
+      "required": ["id", "monthYear"]
+    },
+    "SystemMeta": {
+      "title": "SystemMeta",
+      "description": "System metadata and configuration.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      }
     }
-  ]
+  },
+  "firestore": {
+    "/feedback_items/{itemId}": {
+      "schema": "FeedbackItem",
+      "description": "Customer feedback records including WB cases, category classification, and action tracking."
+    },
+    "/exec_monthly_reports/{reportId}": {
+      "schema": "ExecMonthlyReport",
+      "description": "Executive monthly BDRC reports and mystery shopping scorecards."
+    },
+    "/system_meta/{metaId}": {
+      "schema": "SystemMeta",
+      "description": "System metadata and configuration."
+    }
+  }
 }

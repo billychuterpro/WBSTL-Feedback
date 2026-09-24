@@ -30,6 +30,10 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
   // Month options for quick selection (current year and surrounding months)
   const monthOptions = [
     'Auto-detect from File',
+    'January 2026',
+    'February 2026',
+    'March 2026',
+    'April 2026',
     'May 2026',
     'June 2026',
     'July 2026',
@@ -38,6 +42,18 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
     'October 2026',
     'November 2026',
     'December 2026',
+    'January 2025',
+    'February 2025',
+    'March 2025',
+    'April 2025',
+    'May 2025',
+    'June 2025',
+    'July 2025',
+    'August 2025',
+    'September 2025',
+    'October 2025',
+    'November 2025',
+    'December 2025',
   ];
 
   // Auto-dismiss upload status messages after a few seconds
@@ -72,8 +88,8 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const droppedFile = e.dataTransfer.files[0];
       const lowerName = droppedFile.name.toLowerCase();
-      if (!lowerName.endsWith('.xlsx') && !lowerName.endsWith('.xls')) {
-        setErrorMsg('Please upload a valid Excel spreadsheet (.xlsx or .xls).');
+      if (!lowerName.endsWith('.xlsx') && !lowerName.endsWith('.xls') && !lowerName.endsWith('.csv')) {
+        setErrorMsg('Please upload a valid Excel or CSV spreadsheet (.xlsx, .xls, .csv).');
         return;
       }
       processAndUploadFile(droppedFile);
@@ -191,7 +207,7 @@ export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept=".xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv"
             onChange={handleFileChange}
             disabled={busy}
             className="hidden"

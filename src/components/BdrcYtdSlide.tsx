@@ -10,7 +10,6 @@ import {
   Award,
   Upload,
   Clock,
-  Search,
   Flame,
   AlertCircle
 } from 'lucide-react';
@@ -30,7 +29,6 @@ export const BdrcYtdSlide: React.FC<BdrcYtdSlideProps> = ({
   // Toggle between "Aramark Financial Year" (Oct - Sep) and "Calendar Year" (Jan - Dec)
   const [periodType, setPeriodType] = useState<FiscalPeriodType>('financial_year');
   const [selectedYear, setSelectedYear] = useState<number>(2026);
-  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Month parsing helper: "July 2026" -> { month: "July", monthIndex: 6 (0-indexed), year: 2026 }
   const parsedReports = useMemo(() => {
@@ -247,27 +245,6 @@ export const BdrcYtdSlide: React.FC<BdrcYtdSlideProps> = ({
 
     return results.sort((a, b) => b.monthsCount - a.monthsCount);
   }, [filteredReports]);
-
-  // Running comments & actions list filtered by search
-  const runningTimeline = useMemo(() => {
-    const sorted = [...filteredReports].reverse();
-
-    return sorted.map((r) => {
-      const filteredComments = (r.keyComments || []).filter((c) =>
-        searchTerm ? c.toLowerCase().includes(searchTerm.toLowerCase()) : true
-      );
-      const filteredActions = (r.actions || []).filter((a) =>
-        searchTerm ? a.toLowerCase().includes(searchTerm.toLowerCase()) : true
-      );
-
-      return {
-        report: r,
-        comments: filteredComments,
-        actions: filteredActions,
-        hasMatches: filteredComments.length > 0 || filteredActions.length > 0,
-      };
-    });
-  }, [filteredReports, searchTerm]);
 
   const periodLabel = periodType === 'financial_year'
     ? `Aramark FY${String(selectedYear).slice(-2)} (Oct ${selectedYear - 1} – Sep ${selectedYear})`
@@ -571,125 +548,6 @@ export const BdrcYtdSlide: React.FC<BdrcYtdSlideProps> = ({
               : 'No recurring issues detected across the uploaded reports in this period.'}
           </div>
         )}
-      </div>
-
-      {/* SECTION: MONTH-BY-MONTH RUNNING LIST OF KEY COMMENTS AND ACTIONS */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" /> Month-by-Month Running Log of Key Comments & Actions
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Chronological log tracking executive insights, mystery shop observations, and agreed operational actions across uploaded months.
-            </p>
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search comments & actions..."
-              className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-
-        {/* Timeline Table / Cards */}
-        <div className="space-y-4">
-          {runningTimeline.map(({ report, comments, actions, hasMatches }, idx) => {
-            if (searchTerm && !hasMatches) return null;
-
-            return (
-              <div
-                key={report.id || idx}
-                className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4.5 hover:border-slate-700 transition space-y-3"
-              >
-                {/* Month Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
-                  <div className="flex items-center gap-2.5">
-                    <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 text-xs font-bold font-mono">
-                      {report.monthYear}
-                    </span>
-                    <span className="text-xs text-slate-300 font-semibold">
-                      Mystery Shop: <strong className="text-amber-400">{report.mysteryShopMonthlyAvg ?? 0}%</strong>
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      • Staff Rating: <strong className="text-white">{report.staffRating ?? 0}%</strong>
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      • VFM: <strong className="text-rose-400">{report.cateringVFM ?? 0}%</strong>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
-                    <span>Vol: {report.feedbackVolume}</span>
-                    <span>Compliments: {report.staffCompliments}</span>
-                    <span>Complaints: {report.staffComplaints}</span>
-                  </div>
-                </div>
-
-                {/* 2-Column Comments vs Actions Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Key Comments */}
-                  <div className="space-y-2">
-                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" /> Key BDRC Comments
-                    </h5>
-                    <div className="space-y-1.5">
-                      {comments.length > 0 ? (
-                        comments.map((c, cIdx) => (
-                          <div
-                            key={cIdx}
-                            className="text-xs text-slate-200 bg-slate-900/90 border border-slate-800/80 rounded-xl p-2.5 leading-relaxed flex items-start gap-2"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></span>
-                            <span>{c}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-500 italic">No comments recorded.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="space-y-2">
-                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Agreed Operational Actions
-                    </h5>
-                    <div className="space-y-1.5">
-                      {actions.length > 0 ? (
-                        actions.map((a, aIdx) => (
-                          <div
-                            key={aIdx}
-                            className="text-xs text-slate-300 bg-slate-900/90 border border-slate-800/80 rounded-xl p-2.5 leading-relaxed flex items-start gap-2"
-                          >
-                            <span className="w-4 h-4 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-[9px] shrink-0 mt-0.5">
-                              {aIdx + 1}
-                            </span>
-                            <span>{a}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-500 italic">No actions recorded.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {runningTimeline.length === 0 && (
-            <div className="text-center py-8 text-xs text-slate-400 bg-slate-950 rounded-2xl border border-slate-800">
-              No uploaded reports found for {periodLabel}. Upload monthly reports via &quot;Add / Upload Report&quot; to populate.
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

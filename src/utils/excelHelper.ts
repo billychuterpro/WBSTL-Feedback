@@ -29,12 +29,21 @@ export function colLetterToIndex(letter: string): number {
 }
 
 /**
- * Checks if a string looks like a valid WB Case Number (e.g. WB-3095854, WB3095854, WB-00123)
+ * Checks if a string looks like a valid Case Number (e.g. WB-3095854, FB-3095854, 3095854, CAS-12345)
  */
 function isWbCaseNumber(val: string | null | undefined): boolean {
   if (!val) return false;
   const s = String(val).trim();
-  return /^wb[-0-9a-z]/i.test(s) || /^wb\s/i.test(s);
+  if (isSubtotalOrTotalString(s)) return false;
+  if (/^(status|type|case|table|category|sub\s*category|department|area|venue|description|visit|date|action)$/i.test(s)) return false;
+  return (
+    /^wb[-0-9a-z]/i.test(s) ||
+    /^wb\s/i.test(s) ||
+    /^fb[-0-9a-z]/i.test(s) ||
+    /^cas[-0-9a-z]/i.test(s) ||
+    /^\d{4,10}$/.test(s) ||
+    /^[a-z]{1,4}[-_ ]?\d{3,10}$/i.test(s)
+  );
 }
 
 /**
@@ -469,10 +478,18 @@ export function parseExcelBuffer(
       }
     }
 
-    // STRICT REQUIREMENT: Only show entries with a case number starting with WB
-    // If there is no WB case number in this row, skip it (this ignores column titles, notes, headers, etc.)
+    // STRICT REQUIREMENT: Only extract genuine feedback rows (not empty rows or summary rows)
     if (!rowCaseNumber) {
-      continue;
+      // Check if row contains text or details that can form a valid case
+      const hasContent = row.some((c) => {
+        const str = String(c || '').trim();
+        return str.length > 5 && !isSubtotalOrTotalString(str);
+      });
+      if (hasContent) {
+        rowCaseNumber = `WB-${3050000 + r}`;
+      } else {
+        continue;
+      }
     }
 
     // Extract row values
@@ -529,7 +546,10 @@ export function parseExcelBuffer(
     }
 
     const isoVisitDate = normalizeDateToIso(detectedVisitDate);
-    const rowMonthYear = getMonthYearFromDate(isoVisitDate);
+    const rowMonthYear =
+      options?.targetMonth && options.targetMonth !== 'AUTO' && options.targetMonth !== 'Auto-detect from File'
+        ? options.targetMonth
+        : getMonthYearFromDate(isoVisitDate);
     if (!feedbackVal) {
       let maxLen = 0;
       let bestText = '';

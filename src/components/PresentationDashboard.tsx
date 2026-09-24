@@ -81,10 +81,16 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
       const m = item.monthYear || getMonthYearFromDate(item.date);
       map.set(m, (map.get(m) || 0) + 1);
     });
+    // Ensure all months with executive reports appear in the selector
+    (execReports || []).forEach((r) => {
+      if (r.monthYear && !map.has(r.monthYear)) {
+        map.set(r.monthYear, r.feedbackVolume || 0);
+      }
+    });
     return Array.from(map.entries())
       .map(([month, count]) => ({ month, count, sortKey: getSortableMonthKey(month) }))
       .sort((a, b) => b.sortKey.localeCompare(a.sortKey));
-  }, [items]);
+  }, [items, execReports]);
 
   const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
 
@@ -639,7 +645,7 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
             </div>
 
             {/* KPI Cards Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
               <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-lg text-center flex flex-col justify-between">
                 <span className="text-xs uppercase font-semibold text-slate-400 tracking-wider">CASES RECEIVED</span>
                 <div className="text-3xl font-extrabold text-white my-1 font-mono">{activeCasesCount}</div>
@@ -669,15 +675,6 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
                 <div className="text-3xl font-extrabold text-rose-500 my-1 font-mono">{complaintCount}</div>
                 <div className="text-[11px] text-slate-400">
                   {activeCasesCount > 0 ? ((complaintCount / activeCasesCount) * 100).toFixed(1) : 0}% of volume
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/50 shadow-lg text-center col-span-2 sm:col-span-1 flex flex-col justify-between">
-                <span className="text-xs uppercase font-semibold text-emerald-400 tracking-wider">PRAISE & COMPLIMENTS</span>
-                <div className="text-3xl font-extrabold text-emerald-400 my-1 font-mono">{complimentCount + thankYouCount}</div>
-                <div className="text-[11px] text-slate-400">
-                  <div>{activeCasesCount > 0 ? (((complimentCount + thankYouCount) / activeCasesCount) * 100).toFixed(1) : 0}% positive</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">{complimentCount} compliments · {thankYouCount} thank you</div>
                 </div>
               </div>
             </div>
