@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ExecutiveMonthlyReport } from '../types';
+import { normalizeBdrcVenueName } from '../data/initialExecReports';
 
 interface BdrcYtdSlideProps {
   reports: ExecutiveMonthlyReport[];
@@ -137,7 +138,7 @@ export const BdrcYtdSlide: React.FC<BdrcYtdSlideProps> = ({
 
       (r.venueSatisfaction || []).forEach((vs) => {
         if (vs.score > 0) {
-          const vKey = vs.venue.trim();
+          const vKey = normalizeBdrcVenueName(vs.venue);
           const existing = venueMap.get(vKey) || { sum: 0, count: 0 };
           venueMap.set(vKey, { sum: existing.sum + vs.score, count: existing.count + 1 });
         }

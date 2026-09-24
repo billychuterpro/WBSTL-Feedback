@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
   Store,
@@ -14,6 +14,7 @@ import {
   Plus
 } from 'lucide-react';
 import { ExecutiveMonthlyReport } from '../types';
+import { normalizeReportVenues } from '../data/initialExecReports';
 
 interface MysteryShopSlideProps {
   report: ExecutiveMonthlyReport | null;
@@ -38,12 +39,17 @@ const MONTH_NAMES = [
 ];
 
 export const MysteryShopSlide: React.FC<MysteryShopSlideProps> = ({
-  report,
+  report: rawReport,
   selectedMonth,
   onOpenUploadModal,
   allReports = [],
   onSelectMonth,
 }) => {
+  const report = useMemo(() => {
+    if (!rawReport) return null;
+    return normalizeReportVenues(rawReport);
+  }, [rawReport]);
+
   const displayMonth = selectedMonth === 'ALL' ? (report?.monthYear || 'August 2026') : selectedMonth;
   const hasData = !!report && (report.feedbackVolume > 0 || (report.mysteryShopMonthlyAvg ?? 0) > 0 || (report.venueSatisfaction && report.venueSatisfaction.length > 0));
 

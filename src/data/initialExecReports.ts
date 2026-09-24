@@ -1,5 +1,65 @@
 import { ExecutiveMonthlyReport } from '../types';
 
+export const normalizeBdrcVenueName = (name: string): string => {
+  const trimmed = (name || '').trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === 'hub' ||
+    lower === 'hub cafe' ||
+    lower === 'hub café' ||
+    lower === 'the hub' ||
+    lower === 'the hub cafe' ||
+    lower === 'the hub café' ||
+    lower === 'dragon' ||
+    lower === 'dragon rc' ||
+    lower === 'dragon refectory' ||
+    lower === 'dragon roasted' ||
+    lower === 'dragon cafe' ||
+    lower === 'dragon café' ||
+    lower.includes('dragon rc') ||
+    lower.includes('dragon refectory') ||
+    lower.includes('dragon roasted') ||
+    lower.includes('hub cafe') ||
+    lower.includes('hub café') ||
+    lower === 'hub/dragon rc' ||
+    lower === 'dragon rc (hub)' ||
+    lower === 'hub (dragon rc)'
+  ) {
+    return 'Dragon RC';
+  }
+  return trimmed;
+};
+
+export const normalizeReportVenues = (report: ExecutiveMonthlyReport): ExecutiveMonthlyReport => {
+  if (!report.venueSatisfaction || !Array.isArray(report.venueSatisfaction)) {
+    return report;
+  }
+  const map = new Map<string, { venue: string; score: number; vsLY: string; count: number; sum: number }>();
+  report.venueSatisfaction.forEach((item) => {
+    const canonical = normalizeBdrcVenueName(item.venue);
+    const existing = map.get(canonical);
+    if (existing) {
+      existing.sum += item.score;
+      existing.count += 1;
+      existing.score = Math.round(existing.sum / existing.count);
+      if (!existing.vsLY && item.vsLY) existing.vsLY = item.vsLY;
+    } else {
+      map.set(canonical, {
+        venue: canonical,
+        score: item.score,
+        vsLY: item.vsLY || '',
+        count: 1,
+        sum: item.score,
+      });
+    }
+  });
+
+  return {
+    ...report,
+    venueSatisfaction: Array.from(map.values()).map(({ venue, score, vsLY }) => ({ venue, score, vsLY })),
+  };
+};
+
 export const STANDARD_YOY_TREND = [
   { month: 'Jan', score2025: 91, score2026: 95 },
   { month: 'Feb', score2025: 89, score2026: 90 },
@@ -251,7 +311,7 @@ export const initialExecReports: ExecutiveMonthlyReport[] = [
     venueSatisfaction: [
       { venue: 'Food Hall', score: 84, vsLY: 'n/a vs LY' },
       { venue: 'Chocolate Frog', score: 88, vsLY: '+2% vs LY' },
-      { venue: 'Hub Cafe', score: 85, vsLY: '+3% vs LY' },
+      { venue: 'Dragon RC', score: 85, vsLY: '+3% vs LY' },
       { venue: 'Backlot Cafe', score: 84, vsLY: '+3% vs LY' },
       { venue: 'Butterbeer Bar', score: 86, vsLY: '+5% vs LY' },
     ],
@@ -292,7 +352,7 @@ export const initialExecReports: ExecutiveMonthlyReport[] = [
     venueSatisfaction: [
       { venue: 'Food Hall', score: 83, vsLY: '-2% vs LY' },
       { venue: 'Chocolate Frog', score: 87, vsLY: '+4% vs LY' },
-      { venue: 'Hub Cafe', score: 81, vsLY: '+2% vs LY' },
+      { venue: 'Dragon RC', score: 81, vsLY: '+2% vs LY' },
       { venue: 'Backlot Cafe', score: 81, vsLY: '+4% vs LY' },
       { venue: 'Butterbeer Bar', score: 86, vsLY: '+6% vs LY' },
     ],
@@ -331,7 +391,7 @@ export const initialExecReports: ExecutiveMonthlyReport[] = [
     venueSatisfaction: [
       { venue: 'Food Hall', score: 83, vsLY: 'n/a vs LM' },
       { venue: 'Chocolate Frog', score: 88, vsLY: '+2% vs LM' },
-      { venue: 'Hub Cafe', score: 79, vsLY: '+1% vs LM' },
+      { venue: 'Dragon RC', score: 79, vsLY: '+1% vs LM' },
       { venue: 'Backlot Cafe', score: 80, vsLY: '-1% vs LM' },
       { venue: 'Butterbeer Bar', score: 85, vsLY: '+1% vs LM' },
     ],

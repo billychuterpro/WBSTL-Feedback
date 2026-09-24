@@ -5,7 +5,7 @@ import { PresentationDashboard } from './components/PresentationDashboard';
 
 import { ExcelMappingConfig, FeedbackItem, FeedbackStatus, ExecutiveMonthlyReport } from './types';
 import { DEFAULT_EXCEL_CONFIG, DEMO_AUGUST_2026_ITEMS, DEMO_ALL_MONTHS_ITEMS } from './data/initialData';
-import { initialExecReports } from './data/initialExecReports';
+import { initialExecReports, normalizeReportVenues } from './data/initialExecReports';
 import {
   isComplaintType,
   isComplaintItem,
@@ -269,28 +269,32 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const reportMap = new Map(initialExecReports.map((r) => [r.monthYear.toLowerCase(), r]));
+          const reportMap = new Map(initialExecReports.map((r) => [r.monthYear.toLowerCase(), normalizeReportVenues(r)]));
           // User edited reports override defaults
           parsed.forEach((userR: ExecutiveMonthlyReport) => {
-            reportMap.set(userR.monthYear.toLowerCase(), userR);
+            reportMap.set(userR.monthYear.toLowerCase(), normalizeReportVenues(userR));
           });
-          return Array.from(reportMap.values());
+          const list = Array.from(reportMap.values());
+          localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(list));
+          return list;
         }
       } catch (e) {}
     }
-    localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(initialExecReports));
-    return initialExecReports;
+    const defaultList = initialExecReports.map(normalizeReportVenues);
+    localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(defaultList));
+    return defaultList;
   });
 
   const handleSaveExecReport = (report: ExecutiveMonthlyReport) => {
+    const normalized = normalizeReportVenues(report);
     setExecReports((prev) => {
-      const idx = prev.findIndex((r) => r.monthYear.toLowerCase() === report.monthYear.toLowerCase());
+      const idx = prev.findIndex((r) => r.monthYear.toLowerCase() === normalized.monthYear.toLowerCase());
       let next: ExecutiveMonthlyReport[];
       if (idx >= 0) {
         next = [...prev];
-        next[idx] = report;
+        next[idx] = normalized;
       } else {
-        next = [report, ...prev];
+        next = [normalized, ...prev];
       }
       localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(next));
       return next;

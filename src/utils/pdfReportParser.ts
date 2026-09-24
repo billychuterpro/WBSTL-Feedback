@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { ExecutiveMonthlyReport } from '../types';
+import { normalizeBdrcVenueName, normalizeReportVenues } from '../data/initialExecReports';
 
 // Configure pdfjs worker in browser environment
 if (typeof window !== 'undefined') {
@@ -370,8 +371,8 @@ export function parsePastedReportText(text: string, fallbackMonth = 'August 2026
     },
     {
       name: 'Dragon RC',
-      patterns: [/(?:Dragon RC|Dragon Refectory|Dragon)[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/(?:Dragon RC|Dragon Refectory|Dragon)[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
+      patterns: [/(?:Dragon RC|Dragon Refectory|Dragon Roasted|Dragon Caf[eé]|Dragon|Hub Caf[eé]|The Hub Caf[eé]|The Hub|Hub)[^\d%]{0,15}(\d{1,3})%?/i],
+      vsPatterns: [/(?:Dragon RC|Dragon Refectory|Dragon Roasted|Dragon Caf[eé]|Dragon|Hub Caf[eé]|The Hub Caf[eé]|The Hub|Hub)[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
     },
     {
       name: 'Backlot Cafe',
@@ -548,7 +549,7 @@ export function parsePastedReportText(text: string, fallbackMonth = 'August 2026
     { month: 'August', score2025: 91, score2026: 93 }
   ];
 
-  return {
+  return normalizeReportVenues({
     id: detectedMonth,
     monthYear: detectedMonth,
     feedbackVolume: volumeNumber,
@@ -573,7 +574,7 @@ export function parsePastedReportText(text: string, fallbackMonth = 'August 2026
     keyComments,
     actions,
     yoyTrend: finalYoY,
-  };
+  });
 }
 
 export function parseBdrcReportText(text: string, fallbackMonth?: string): ExecutiveMonthlyReport {
