@@ -15,7 +15,8 @@ import {
   ClipboardPaste,
   Sparkles,
   Eye,
-  Check
+  Check,
+  Calendar
 } from 'lucide-react';
 import { ExecutiveMonthlyReport } from '../types';
 import { initialExecReports } from '../data/initialExecReports';
@@ -342,6 +343,42 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Target Month Banner */}
+        <div className="bg-slate-900 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-amber-400" />
+            <span className="text-xs font-bold text-slate-300">Target Reporting Month:</span>
+            <input
+              type="text"
+              value={formData.monthYear}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFormData((prev) => ({ ...prev, monthYear: val, id: val }));
+              }}
+              placeholder="e.g. September 2026"
+              className="bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-lg px-2.5 py-1 text-xs text-white font-bold font-mono focus:outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-full">
+            {['January 2026', 'February 2026', 'March 2026', 'April 2026', 'May 2026', 'June 2026', 'July 2026', 'August 2026', 'September 2026', 'October 2026', 'November 2026', 'December 2026', 'January 2027'].map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => {
+                  setFormData((prev) => ({ ...prev, monthYear: m, id: m }));
+                }}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition shrink-0 border ${
+                  formData.monthYear.toLowerCase().trim() === m.toLowerCase().trim()
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                }`}
+              >
+                {m.replace(' 2026', '').replace(' 2027', " '27")}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tab Navigation */}

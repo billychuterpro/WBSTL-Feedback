@@ -11,7 +11,13 @@ import {
   AlertCircle,
   Calendar,
   ChevronRight,
-  Plus
+  Plus,
+  Archive,
+  ArchiveRestore,
+  Filter,
+  Clock,
+  Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { ExecutiveMonthlyReport } from '../types';
 import { normalizeReportVenues } from '../data/initialExecReports';
@@ -53,9 +59,69 @@ export const MysteryShopSlide: React.FC<MysteryShopSlideProps> = ({
   const displayMonth = selectedMonth === 'ALL' ? (report?.monthYear || 'August 2026') : selectedMonth;
   const hasData = !!report && (report.feedbackVolume > 0 || (report.mysteryShopMonthlyAvg ?? 0) > 0 || (report.venueSatisfaction && report.venueSatisfaction.length > 0));
 
+  // Ribbon View Mode & Archive state
+  const [ribbonMode, setRibbonMode] = useState<'rolling' | '2026' | '2025' | '2027' | 'archived'>('rolling');
+  const [isRibbonExpanded, setIsRibbonExpanded] = useState<boolean>(false);
+  const [archivedMonths, setArchivedMonths] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('bdrc_archived_months_v1');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleArchiveMonth = (mFull: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setArchivedMonths((prev) => {
+      const lower = mFull.toLowerCase().trim();
+      const next = prev.some((x) => x.toLowerCase().trim() === lower)
+        ? prev.filter((x) => x.toLowerCase().trim() !== lower)
+        : [...prev, mFull];
+      localStorage.setItem('bdrc_archived_months_v1', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const isArchived = (mFull: string) =>
+    archivedMonths.some((x) => x.toLowerCase().trim() === mFull.toLowerCase().trim());
+
   // Determine active year from displayMonth
   const yearMatch = displayMonth.match(/\b(202\d)\b/);
   const activeYear = yearMatch ? parseInt(yearMatch[1], 10) : 2026;
+
+  // Compute rolling 12 months ending at August 2026 / latest month
+  const rolling12Months = useMemo(() => {
+    const list: string[] = [];
+    const monthsOrder = ['September', 'October', 'November', 'December', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August'];
+    monthsOrder.forEach((m) => {
+      if (['September', 'October', 'November', 'December'].includes(m)) {
+        list.push(`${m} 2025`);
+      } else {
+        list.push(`${m} 2026`);
+      }
+    });
+    return list;
+  }, []);
+
+  // Compute displayed months depending on ribbonMode
+  const displayedMonthList = useMemo(() => {
+    if (ribbonMode === 'archived') {
+      return archivedMonths;
+    }
+    let fullList: string[] = [];
+    if (ribbonMode === 'rolling') {
+      fullList = rolling12Months;
+    } else if (ribbonMode === '2025') {
+      fullList = MONTH_NAMES.map((m) => `${m} 2025`);
+    } else if (ribbonMode === '2027') {
+      fullList = MONTH_NAMES.map((m) => `${m} 2027`);
+    } else {
+      fullList = MONTH_NAMES.map((m) => `${m} 2026`);
+    }
+    // Exclude archived items from active views
+    return fullList.filter((m) => !isArchived(m));
+  }, [ribbonMode, rolling12Months, archivedMonths]);
 
   // Compute average score across venues if report exists
   const venueScores = report?.venueSatisfaction || [];
@@ -72,99 +138,199 @@ export const MysteryShopSlide: React.FC<MysteryShopSlideProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Slide Top Header */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5" /> BDRC Data Month
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-950 text-slate-200 border border-slate-700 text-xs font-mono font-semibold">
-              {displayMonth}
-            </span>
-            {hasData ? (
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Verified Dataset Active
-              </span>
+      {/* Streamlined Slide Control Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-xl transition-all">
+        {/* Always-Visible Compact Bar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Left: Title & Status */}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                <Award className="w-5 h-5 text-amber-400 shrink-0" />
+                <span>Catering BDRC Quality & Mystery Shop</span>
+              </h2>
+              
+              {/* Active Month Selector Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsRibbonExpanded(!isRibbonExpanded)}
+                className="px-3 py-1 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold transition flex items-center gap-1.5 shadow-sm group cursor-pointer"
+              >
+                <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                {displayMonth}
+                <ChevronDown className={`w-3.5 h-3.5 text-amber-400 transition-transform duration-200 ${isRibbonExpanded ? 'rotate-180' : ''}`} />
+              </button>
+
+              {hasData ? (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[11px] font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Loaded
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[11px] font-medium flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 text-amber-400" /> Pending Upload
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Showing sentiment, venue ratings & mystery shop results for <strong className="text-slate-200">{displayMonth}</strong>.
+            </p>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsRibbonExpanded(!isRibbonExpanded)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                isRibbonExpanded
+                  ? 'bg-amber-500 text-slate-950 border-amber-400'
+                  : 'bg-slate-950 text-slate-300 border-slate-700 hover:text-white hover:border-slate-600'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Select Month</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isRibbonExpanded ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Primary Action Button */}
+            <button
+              onClick={() => onOpenUploadModal(displayMonth)}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-md shadow-amber-500/10 flex items-center gap-1.5 cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>{hasData ? `Update ${displayMonth}` : `Upload BDRC`}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Collapsible Month Selection Drawer - Hidden by Default */}
+        {isRibbonExpanded && (
+          <div className="pt-3 border-t border-slate-800/80 mt-3 space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                <span>Switch Reporting Period:</span>
+              </div>
+
+              {/* Filter Pills inside Drawer */}
+              <div className="inline-flex p-0.5 rounded-lg bg-slate-950 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setRibbonMode('rolling')}
+                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition flex items-center gap-1 ${
+                    ribbonMode === 'rolling'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Rolling 12
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRibbonMode('2026')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition ${
+                    ribbonMode === '2026'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  2026
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRibbonMode('2025')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition ${
+                    ribbonMode === '2025'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  2025
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRibbonMode('archived')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition flex items-center gap-1 ${
+                    ribbonMode === 'archived'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Archive className="w-3 h-3" />
+                  Vault ({archivedMonths.length})
+                </button>
+              </div>
+            </div>
+
+            {/* Month Cards Grid */}
+            {displayedMonthList.length > 0 ? (
+              <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-1.5 pt-1">
+                {displayedMonthList.map((mFull) => {
+                  const isSelected = displayMonth.toLowerCase().trim() === mFull.toLowerCase().trim();
+                  const rep = uploadedMonthsMap.get(mFull.toLowerCase().trim());
+                  const hasReport = !!rep;
+                  const isArch = isArchived(mFull);
+                  const mShort = mFull.split(' ')[0].slice(0, 3);
+                  const yrShort = mFull.split(' ')[1] ? `'${mFull.split(' ')[1].slice(2)}` : '';
+
+                  return (
+                    <div
+                      key={mFull}
+                      onClick={() => {
+                        if (onSelectMonth) onSelectMonth(mFull);
+                        setIsRibbonExpanded(false);
+                      }}
+                      className={`p-2 rounded-xl text-center transition flex flex-col items-center justify-between min-h-[52px] border cursor-pointer group relative ${
+                        isSelected
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-sm shadow-amber-500/20'
+                          : hasReport
+                          ? 'bg-slate-950/80 hover:bg-slate-800 text-slate-200 border-emerald-500/30 hover:border-emerald-500'
+                          : 'bg-slate-950/40 hover:bg-slate-800/60 text-slate-400 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="w-full flex items-center justify-between px-0.5">
+                        <span className={`text-xs font-bold ${isSelected ? 'text-slate-950' : 'text-slate-200'}`}>
+                          {mShort} <span className="text-[10px] opacity-70">{yrShort}</span>
+                        </span>
+                        
+                        <button
+                          type="button"
+                          title={isArch ? 'Restore to Active Ribbon' : 'Move to Archive Vault'}
+                          onClick={(e) => toggleArchiveMonth(mFull, e)}
+                          className={`opacity-0 group-hover:opacity-100 p-0.5 rounded transition ${
+                            isSelected
+                              ? 'text-slate-900 hover:bg-slate-950/20'
+                              : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800'
+                          }`}
+                        >
+                          {isArch ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
+                        </button>
+                      </div>
+                      
+                      {hasReport ? (
+                        <span className={`text-[9px] font-mono px-1 py-0.2 rounded font-semibold mt-1 ${
+                          isSelected ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-300'
+                        }`}>
+                          {rep.feedbackVolume ? `v:${rep.feedbackVolume}` : '✓'}
+                        </span>
+                      ) : (
+                        <span className={`text-[9px] font-mono mt-1 ${isSelected ? 'text-slate-800' : 'text-slate-600'}`}>
+                          empty
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-400 border border-amber-500/30 text-[11px] font-medium flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> No report uploaded for {displayMonth}
-              </span>
+              <div className="text-center py-4 text-xs text-slate-500 bg-slate-950/50 rounded-xl border border-slate-800/80">
+                {ribbonMode === 'archived'
+                  ? 'No archived months in vault.'
+                  : 'No months listed for this view filter.'}
+              </div>
             )}
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-            Catering BDRC Research, Quality & Mystery Shop
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-3xl">
-            {hasData
-              ? `Independent BDRC research sentiment, mystery shop visits, venue satisfaction scores, and agreed operational actions for ${displayMonth}.`
-              : `Select any month below to view or upload monthly BDRC reports.`}
-          </p>
-        </div>
-
-        {/* Action Button */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <button
-            onClick={() => onOpenUploadModal(displayMonth)}
-            className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-amber-500/15 flex items-center gap-2"
-          >
-            <Upload className="w-4 h-4" />
-            {hasData ? `Update BDRC for ${displayMonth}` : `Upload BDRC for ${displayMonth}`}
-          </button>
-        </div>
-      </div>
-
-      {/* Multi-Month Selector Ribbon */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-md">
-        <div className="flex items-center justify-between px-2 pb-2 mb-2 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-bold text-white">Select BDRC Reporting Month ({activeYear}):</span>
-          </div>
-          <span className="text-[11px] text-slate-400">
-            {uploadedMonthsMap.size} month(s) loaded
-          </span>
-        </div>
-
-        <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-1.5">
-          {MONTH_NAMES.map((mName) => {
-            const mFull = `${mName} ${activeYear}`;
-            const isSelected = displayMonth.toLowerCase() === mFull.toLowerCase();
-            const rep = uploadedMonthsMap.get(mFull.toLowerCase());
-            const hasReport = !!rep;
-
-            return (
-              <button
-                key={mName}
-                type="button"
-                onClick={() => onSelectMonth && onSelectMonth(mFull)}
-                className={`p-2 rounded-xl text-center transition flex flex-col items-center justify-between min-h-[58px] border relative ${
-                  isSelected
-                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
-                    : hasReport
-                    ? 'bg-slate-950/80 hover:bg-slate-800 text-slate-200 border-emerald-500/40 hover:border-emerald-500'
-                    : 'bg-slate-950/40 hover:bg-slate-800/60 text-slate-400 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <span className={`text-[11px] font-bold ${isSelected ? 'text-slate-950' : 'text-slate-200'}`}>
-                  {mName.slice(0, 3)}
-                </span>
-                
-                {hasReport ? (
-                  <span className={`text-[9px] font-mono px-1 py-0.2 rounded font-semibold flex items-center gap-0.5 ${
-                    isSelected ? 'bg-slate-950 text-emerald-300' : 'bg-emerald-500/20 text-emerald-300'
-                  }`}>
-                    {rep.feedbackVolume ? `v:${rep.feedbackVolume}` : '✓'}
-                  </span>
-                ) : (
-                  <span className={`text-[9px] font-mono ${isSelected ? 'text-slate-800' : 'text-slate-600'}`}>
-                    empty
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        )}
       </div>
 
       {/* When no data is uploaded for this month */}
