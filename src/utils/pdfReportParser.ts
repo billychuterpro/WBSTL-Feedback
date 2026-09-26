@@ -255,6 +255,45 @@ export function detectMonthFromTextOrFilename(input: string): string | null {
   return null;
 }
 
+function findPercentAfter(text: string, labelRegex: RegExp): number {
+  const match = text.match(labelRegex);
+  if (!match) return 0;
+  const startPos = match.index! + match[0].length;
+  const sub = text.slice(startPos, startPos + 500);
+  const percentMatch = sub.match(/\b(\d{1,3})%/);
+  if (percentMatch) {
+    const val = parseInt(percentMatch[1], 10);
+    if (val >= 0 && val <= 100) return val;
+  }
+  return 0;
+}
+
+function findNumberAfter(text: string, labelRegex: RegExp): number {
+  const match = text.match(labelRegex);
+  if (!match) return 0;
+  const startPos = match.index! + match[0].length;
+  const sub = text.slice(startPos, startPos + 500);
+  const matches = Array.from(sub.matchAll(/\b(\d{1,4})\b/g));
+  for (const m of matches) {
+    const val = parseInt(m[1], 10);
+    const afterChar = sub.slice(m.index! + m[0].length, m.index! + m[0].length + 1);
+    if (afterChar !== '%' && val <= 500) {
+      return val;
+    }
+  }
+  return 0;
+}
+
+function findVsLYAfter(text: string, labelRegex: RegExp): string {
+  const match = text.match(labelRegex);
+  if (!match) return '';
+  const startPos = match.index! + match[0].length;
+  const sub = text.slice(startPos, startPos + 500);
+  const vsMatch = sub.match(/(?:\()?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY|\d+\s*received\s*LY|vs\s*\d+\s*LY|\d+%\s*increase[^)\n\r]*VS\s*LY)(?:\))?/i);
+  if (vsMatch) return vsMatch[1].trim();
+  return '';
+}
+
 /**
  * Intelligent parser for pasted text / PDF extracted text / spreadsheet content.
  * Extracts all core metrics, cards, percentages, comments, and actions.
@@ -267,196 +306,65 @@ export function parsePastedReportText(text: string, fallbackMonth = 'August 2026
   const detectedMonth = detectMonthFromTextOrFilename(singleLine) || fallbackMonth;
 
   // 2. Feedback Volume
-  const volumeNumber = extractNumberByPatterns(singleLine, [
-    /(?:Feedback\s*Volume|Total\s*Volume|Volume)[\s:=]+(\d+)/i,
-    /Volume[^\d]{1,15}(\d+)/i,
-    /(\d+)\s*(?:vs\s*\d+\s*LY|compared to\s*\d+\s*LY)/i,
-    /Total Cases Received[:\s]+(\d+)/i,
-    /(?:Cases|Feedbacks|Responses)[\s:=]+(\d+)/i,
-  ]) ?? 0;
+  const volumeNumber = findNumberAfter(singleLine, /Volume of Feedback|Feedback Volume|Total Volume/i) ||
+    extractNumberByPatterns(singleLine, [
+      /(?:Feedback\s*Volume|Total\s*Volume|Volume)[\s:=]+(\d+)/i,
+      /Volume[^\d]{1,15}(\d+)/i,
+      /(\d+)\s*(?:vs\s*\d+\s*LY|compared to\s*\d+\s*LY)/i,
+    ]) || 0;
 
-  const volumeVsLY = extractStringByPatterns(singleLine, [
-    /(vs\s*\d+\s*LY)/i,
-    /(compared to\s*\d+\s*LY)/i,
-    /(vs\s*LY[:\s]*[+\-]?\d+%?)/i,
-    /([+\-]?\d+%\s*vs\s*LY)/i,
-  ]) || '';
+  const volumeVsLY = findVsLYAfter(singleLine, /Volume of Feedback|Feedback Volume|Total Volume/i) ||
+    extractStringByPatterns(singleLine, [
+      /(vs\s*\d+\s*LY)/i,
+      /(compared to\s*\d+\s*LY)/i,
+    ]) || '';
 
   // 3. Staff Complaints
-  const staffComplaints = extractNumberByPatterns(singleLine, [
-    /Staff Complaints?[\s:=]+(\d+)/i,
-    /Complaints?[\s:=]+(\d+)/i,
-    /Staff Complaints?[^\d]{1,10}(\d+)/i,
-  ]) ?? 0;
-
-  const staffComplaintsVsLY = extractStringByPatterns(singleLine, [
-    /Staff Complaints?[^\n\r]*?(\d+\s*received\s*LY)/i,
-    /(\d+\s*received\s*LY)/i,
-    /Staff Complaints?[^\n\r]*?([+\-]?\d+%?\s*vs\s*LY)/i,
-    /Complaints?[^\n\r]*?([+\-]?\d+%?\s*vs\s*LY)/i,
-  ]) || '';
+  const staffComplaints = findNumberAfter(singleLine, /Staff Complaints/i) || 0;
+  const staffComplaintsVsLY = findVsLYAfter(singleLine, /Staff Complaints/i) || '0 received LY';
 
   // 4. Staff Compliments
-  const staffCompliments = extractNumberByPatterns(singleLine, [
-    /Staff Compliments?[\s:=]+(\d+)/i,
-    /Compliments?[\s:=]+(\d+)/i,
-    /Staff Compliments?[^\d]{1,10}(\d+)/i,
-  ]) ?? 0;
-
-  const staffComplimentsVsLY = extractStringByPatterns(singleLine, [
-    /Staff Compliments?[^\n\r]*?(\d+\s*received\s*LY)/i,
-    /(\d+\s*received\s*LY)/i,
-    /Staff Compliments?[^\n\r]*?([+\-]?\d+%?\s*vs\s*LY)/i,
-    /Compliments?[^\n\r]*?([+\-]?\d+%?\s*vs\s*LY)/i,
-  ]) || '';
+  const staffCompliments = findNumberAfter(singleLine, /Staff Compliments/i) || 0;
+  const staffComplimentsVsLY = findVsLYAfter(singleLine, /Staff Compliments/i) || '';
 
   // 5. Staff Thank Yous
-  const staffThankYous = extractNumberByPatterns(singleLine, [
-    /Staff Thank Yous?[\s:=]+(\d+)/i,
-    /Thank Yous?[\s:=]+(\d+)/i,
-    /Praise & Thank Yous?[\s:=]+(\d+)/i,
-    /Praise[\s:=]+(\d+)/i,
-  ]) ?? 0;
-
-  const staffThankYousVsLY = extractStringByPatterns(singleLine, [
-    /(\d+%\s*increase[^.\n\r]*?LY)/i,
-    /Staff Thank Yous?[^\n\r]*?([+\-]?\d+%?\s*vs\s*LY)/i,
-    /Thank Yous?[^\n\r]*?([+\-]?\d+%?\s*vs\s*LY)/i,
-    /([+\-]?\d+%\s*vs\s*LY)/i,
-  ]) || '';
+  const staffThankYous = findNumberAfter(singleLine, /Staff Thank Yous/i) || 0;
+  const staffThankYousVsLY = findVsLYAfter(singleLine, /Staff Thank Yous/i) || '';
 
   // 6. Mystery Shop Scores
-  const mysteryShopVisit1 = extractNumberByPatterns(singleLine, [
-    /Visit 1[\s:=]+(\d+)%?/i,
-    /Visit 1[^\d]{1,8}(\d+)%?/i,
-    /Shop 1[\s:=]+(\d+)%?/i,
-  ]) ?? 0;
+  const mysteryShopVisit1 = findPercentAfter(singleLine, /Visit 1/i) ||
+    extractNumberByPatterns(singleLine, [/Visit 1[\s:=]+(\d+)%?/i]) || 0;
+  const mysteryShopVisit1VsLY = findVsLYAfter(singleLine, /Visit 1/i) || '';
 
-  const mysteryShopVisit1VsLY = extractStringByPatterns(singleLine, [
-    /Visit 1[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY)/i,
-  ]) || '';
+  const mysteryShopVisit2 = findPercentAfter(singleLine, /Visit 2/i) ||
+    extractNumberByPatterns(singleLine, [/Visit 2[\s:=]+(\d+)%?/i]) || 0;
+  const mysteryShopVisit2VsLY = findVsLYAfter(singleLine, /Visit 2/i) || '';
 
-  const mysteryShopVisit2 = extractNumberByPatterns(singleLine, [
-    /Visit 2[\s:=]+(\d+)%?/i,
-    /Visit 2[^\d]{1,8}(\d+)%?/i,
-    /Shop 2[\s:=]+(\d+)%?/i,
-  ]) ?? 0;
-
-  const mysteryShopVisit2VsLY = extractStringByPatterns(singleLine, [
-    /Visit 2[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY)/i,
-  ]) || '';
-
-  const mysteryShopMonthlyAvg = extractNumberByPatterns(singleLine, [
-    /Monthly Avg[\s:=]+(\d+)%?/i,
-    /Monthly Average[\s:=]+(\d+)%?/i,
-    /Average Score[\s:=]+(\d+)%?/i,
-    /Mystery Shop (?:Monthly )?Avg[\s:=]+(\d+)%?/i,
-  ]) ?? (mysteryShopVisit1 && mysteryShopVisit2 ? Math.round((mysteryShopVisit1 + mysteryShopVisit2) / 2) : (mysteryShopVisit1 || mysteryShopVisit2 || 0));
-
-  const mysteryShopMonthlyAvgVsLY = extractStringByPatterns(singleLine, [
-    /Monthly Avg[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY)/i,
-  ]) || '';
+  const mysteryShopMonthlyAvg = findPercentAfter(singleLine, /Monthly Average|Monthly Avg/i) ||
+    (mysteryShopVisit1 && mysteryShopVisit2 ? Math.round((mysteryShopVisit1 + mysteryShopVisit2) / 2) : 0);
+  const mysteryShopMonthlyAvgVsLY = findVsLYAfter(singleLine, /Monthly Average|Monthly Avg/i) || '';
 
   // 7. Venue Satisfaction Scores
-  const standardVenues = [
-    {
-      name: 'Food Hall',
-      patterns: [/Food Hall[^\d%]{0,15}(\d{1,3})%?/i, /The Food Hall[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/Food Hall[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    },
-    {
-      name: 'Chocolate Frog',
-      patterns: [/(?:Chocolate Frog|Frog Caf[eé])[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/(?:Chocolate Frog|Frog Caf[eé])[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    },
-    {
-      name: 'Dragon RC',
-      patterns: [/(?:Dragon RC|Dragon Refectory|Dragon Roasted|Dragon Caf[eé]|Dragon|Hub Caf[eé]|The Hub Caf[eé]|The Hub|Hub)[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/(?:Dragon RC|Dragon Refectory|Dragon Roasted|Dragon Caf[eé]|Dragon|Hub Caf[eé]|The Hub Caf[eé]|The Hub|Hub)[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    },
-    {
-      name: 'Backlot Cafe',
-      patterns: [/(?:Backlot Caf[eé]|Backlot)[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/(?:Backlot Caf[eé]|Backlot)[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    },
-    {
-      name: 'Butterbeer Bar',
-      patterns: [/(?:Butterbeer Bar|Butterbeer)[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/(?:Butterbeer Bar|Butterbeer)[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    },
-    {
-      name: 'The Hogwarts Table',
-      patterns: [/(?:The Hogwarts Table|Hogwarts Table|Hogwarts)[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/(?:The Hogwarts Table|Hogwarts Table|Hogwarts)[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    },
-    {
-      name: 'Afternoon Tea',
-      patterns: [/Afternoon Tea[^\d%]{0,15}(\d{1,3})%?/i],
-      vsPatterns: [/Afternoon Tea[^\n\r]*?([+\-]?\d+%\s*vs\s*LY|[+\-]?\d+\s*vs\s*LY|n\/a\s*vs\s*LY)/i]
-    }
+  const standardVenuesConfig = [
+    { name: 'Food Hall', regex: /(?:Satisfaction:\s*)?Food Hall/i },
+    { name: 'Chocolate Frog', regex: /(?:Satisfaction:\s*)?(?:Chocolate Frog|Frog Caf[eé])/i },
+    { name: 'Dragon RC', regex: /(?:Satisfaction:\s*)?(?:Dragon RC|Dragon Refectory|Dragon Roasted|Dragon|Hub Caf[eé]|Hub)/i },
+    { name: 'Backlot Cafe', regex: /(?:Satisfaction:\s*)?(?:Backlot Caf[eé]|Backlot)/i },
+    { name: 'Butterbeer Bar', regex: /(?:Satisfaction:\s*)?(?:Butterbeer Bar|Butterbeer)/i },
+    { name: 'The Hogwarts Table', regex: /(?:Satisfaction:\s*)?(?:The Hogwarts Table|Hogwarts Table)/i },
   ];
 
-  const venueMap = new Map<string, { venue: string; score: number; vsLY: string }>();
-
-  standardVenues.forEach((sv) => {
-    let score = extractNumberByPatterns(singleLine, sv.patterns) ?? 0;
-    if (score > 100) score = Math.min(100, Math.round(score / 10)); // normalize if combined
-    const vsLY = extractStringByPatterns(singleLine, sv.vsPatterns);
-    venueMap.set(sv.name, { venue: sv.name, score, vsLY });
+  const venueSatisfaction = standardVenuesConfig.map((v) => {
+    const score = findPercentAfter(singleLine, v.regex);
+    const vsLY = findVsLYAfter(singleLine, v.regex);
+    return { venue: v.name, score, vsLY };
   });
 
-  // Dynamic regex for custom venues formatted as: "Venue Name: 85% (+4% vs LY)" or "Venue Name - 85%"
-  const dynamicVenueRegex = /([A-Z][A-Za-z\s&'-]{2,25})[:\-\s]+(\d{1,3})%(?:\s*\(([+\-]?\d+%\s*vs\s*LY|n\/a\s*vs\s*LY)\))?/g;
-  let dynamicMatch: RegExpExecArray | null;
-  while ((dynamicMatch = dynamicVenueRegex.exec(singleLine)) !== null) {
-    const vName = dynamicMatch[1].trim();
-    const scoreVal = parseInt(dynamicMatch[2], 10);
-    const vsVal = dynamicMatch[3] ? dynamicMatch[3].trim() : '';
+  const staffRating = findPercentAfter(singleLine, /Staff Rating|Staff Friendliness/i);
+  const staffRatingVsLY = findVsLYAfter(singleLine, /Staff Rating|Staff Friendliness/i);
 
-    const lower = vName.toLowerCase();
-    if (
-      !lower.includes('staff rating') &&
-      !lower.includes('catering vfm') &&
-      !lower.includes('visit') &&
-      !lower.includes('monthly avg') &&
-      !lower.includes('volume') &&
-      !lower.includes('complaint') &&
-      !lower.includes('compliment') &&
-      !lower.includes('thank you') &&
-      scoreVal > 0 &&
-      scoreVal <= 100
-    ) {
-      if (!venueMap.has(vName)) {
-        venueMap.set(vName, { venue: vName, score: scoreVal, vsLY: vsVal });
-      }
-    }
-  }
-
-  const venueSatisfaction = Array.from(venueMap.values());
-
-  const staffRating = extractNumberByPatterns(singleLine, [
-    /Staff Rating[\s:=]+(\d+)%?/i,
-    /Staff Friendliness[\s:=]+(\d+)%?/i,
-    /Staff Satisfaction[\s:=]+(\d+)%?/i,
-    /Staff[\s:=]+(\d+)%(?:\s*\([+\-]?\d+%\s*vs\s*LY\))?/i,
-  ]) ?? 0;
-
-  const staffRatingVsLY = extractStringByPatterns(singleLine, [
-    /Staff Rating[^\n\r]*?([+\-]?\d+%\s*vs\s*LY)/i,
-    /Staff Friendliness[^\n\r]*?([+\-]?\d+%\s*vs\s*LY)/i,
-    /Staff[^\n\r]*?([+\-]?\d+%\s*vs\s*LY)/i,
-  ]) || '';
-
-  const cateringVFM = extractNumberByPatterns(singleLine, [
-    /(?:Catering VFM|Value for Money|VFM)[\s:=]+(\d+)%?/i,
-    /Catering Value[\s:=]+(\d+)%?/i,
-  ]) ?? 0;
-
-  const cateringVFMVsLY = extractStringByPatterns(singleLine, [
-    /Catering VFM[^\n\r]*?([+\-]?\d+%\s*vs\s*LY)/i,
-    /VFM[^\n\r]*?([+\-]?\d+%\s*vs\s*LY)/i,
-    /Value for Money[^\n\r]*?([+\-]?\d+%\s*vs\s*LY)/i,
-  ]) || '';
+  const cateringVFM = findPercentAfter(singleLine, /Catering VFM|Value for Money/i);
+  const cateringVFMVsLY = findVsLYAfter(singleLine, /Catering VFM|Value for Money/i);
 
   // 8. Comments & Actions
   const keyComments: string[] = [];

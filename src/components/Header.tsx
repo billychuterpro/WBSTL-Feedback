@@ -30,19 +30,6 @@ export const Header: React.FC<HeaderProps> = ({ firestoreConnected = true, itemC
           </div>
 
           <div className="flex items-center gap-2.5">
-            <span
-              id="firestore-cloud-status"
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition ${
-                firestoreConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-              }`}
-              title={firestoreConnected ? 'Connected to Cloud Firestore Database' : 'Connecting to Cloud Firestore...'}
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span className={`w-1.5 h-1.5 rounded-full ${firestoreConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span>{firestoreConnected ? 'Firestore Connected' : 'Connecting DB...'}</span>
-            </span>
           </div>
         </div>
       </div>

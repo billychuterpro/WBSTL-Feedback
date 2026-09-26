@@ -1,5 +1,5 @@
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -152,10 +152,9 @@ Ensure all score numbers are pure integers without '%' symbols.`;
 
     // Standard resilient models in priority order per gemini-api guidelines
     const candidateModels = [
-      'gemini-3.8-flash',
       'gemini-flash-latest',
       'gemini-3.1-flash-lite',
-      'gemini-2.5-flash',
+      'gemini-3.8-flash',
     ];
     let response: any = null;
     let successfulModel = '';
@@ -174,6 +173,62 @@ Ensure all score numbers are pure integers without '%' symbols.`;
             ],
             config: {
               responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  monthYear: { type: Type.STRING },
+                  feedbackVolume: { type: Type.INTEGER },
+                  feedbackVolumeVsLY: { type: Type.STRING },
+                  staffComplaints: { type: Type.INTEGER },
+                  staffComplaintsVsLY: { type: Type.STRING },
+                  staffCompliments: { type: Type.INTEGER },
+                  staffComplimentsVsLY: { type: Type.STRING },
+                  staffThankYous: { type: Type.INTEGER },
+                  staffThankYousVsLY: { type: Type.STRING },
+                  mysteryShopVisit1: { type: Type.INTEGER },
+                  mysteryShopVisit1VsLY: { type: Type.STRING },
+                  mysteryShopVisit2: { type: Type.INTEGER },
+                  mysteryShopVisit2VsLY: { type: Type.STRING },
+                  mysteryShopMonthlyAvg: { type: Type.INTEGER },
+                  mysteryShopMonthlyAvgVsLY: { type: Type.STRING },
+                  venueSatisfaction: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        venue: { type: Type.STRING },
+                        score: { type: Type.INTEGER },
+                        vsLY: { type: Type.STRING },
+                      },
+                      required: ['venue', 'score'],
+                    },
+                  },
+                  staffRating: { type: Type.INTEGER },
+                  staffRatingVsLY: { type: Type.STRING },
+                  cateringVFM: { type: Type.INTEGER },
+                  cateringVFMVsLY: { type: Type.STRING },
+                  keyComments: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                  actions: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                  yoyTrend: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        month: { type: Type.STRING },
+                        score2025: { type: Type.INTEGER },
+                        score2026: { type: Type.INTEGER },
+                      },
+                    },
+                  },
+                },
+                required: ['monthYear', 'feedbackVolume', 'venueSatisfaction', 'keyComments', 'actions'],
+              },
             },
           });
           if (response && response.text) {
@@ -255,6 +310,30 @@ Ensure all score numbers are pure integers without '%' symbols.`;
       parsedData.monthYear = monthHint || 'August 2026';
     }
     parsedData.id = parsedData.monthYear;
+
+    // Normalize venue satisfaction array (e.g. Hub / Dragon RC -> Dragon RC)
+    if (Array.isArray(parsedData.venueSatisfaction)) {
+      const vMap = new Map<string, { venue: string; score: number; vsLY: string; sum: number; count: number }>();
+      parsedData.venueSatisfaction.forEach((vs: any) => {
+        let name = String(vs.venue || '').trim();
+        const lower = name.toLowerCase();
+        if (lower.includes('hub') || lower.includes('dragon')) {
+          name = 'Dragon RC';
+        }
+        const score = Number(vs.score) || 0;
+        const vsLY = vs.vsLY ? String(vs.vsLY).trim() : '';
+        const existing = vMap.get(name);
+        if (existing) {
+          existing.sum += score;
+          existing.count += 1;
+          existing.score = Math.round(existing.sum / existing.count);
+          if (!existing.vsLY && vsLY) existing.vsLY = vsLY;
+        } else {
+          vMap.set(name, { venue: name, score, vsLY, sum: score, count: 1 });
+        }
+      });
+      parsedData.venueSatisfaction = Array.from(vMap.values()).map(({ venue, score, vsLY }) => ({ venue, score, vsLY }));
+    }
 
     return res.json({
       success: true,

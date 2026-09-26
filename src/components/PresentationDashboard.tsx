@@ -488,21 +488,6 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
               <div className="text-xs text-slate-300 bg-slate-800/80 border border-slate-700 px-2.5 py-1.5 rounded-lg font-mono">
                 Month Cases: <strong className="text-amber-400 font-bold">{activeCasesCount}</strong>
               </div>
-
-              {/* Cloud Firestore Status */}
-              <span
-                id="firestore-cloud-status"
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition ${
-                  firestoreConnected
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                }`}
-                title={firestoreConnected ? 'Connected to Cloud Firestore Database' : 'Connecting to Cloud Firestore...'}
-              >
-                <Database className="w-3.5 h-3.5" />
-                <span className={`w-1.5 h-1.5 rounded-full ${firestoreConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-                <span className="hidden sm:inline">{firestoreConnected ? 'Firestore Connected' : 'Connecting DB...'}</span>
-              </span>
             </div>
           </div>
         </div>
@@ -1455,7 +1440,12 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
           <MysteryShopSlide
             report={activeExecReport}
             selectedMonth={selectedMonth}
-            onOpenUploadModal={() => setIsExecModalOpen(true)}
+            onOpenUploadModal={(m) => {
+              if (m) setSelectedMonth(m);
+              setIsExecModalOpen(true);
+            }}
+            allReports={execReports}
+            onSelectMonth={(m) => setSelectedMonth(m)}
           />
         )}
 

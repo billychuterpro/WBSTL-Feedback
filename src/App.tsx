@@ -262,9 +262,10 @@ export default function App() {
       localStorage.removeItem('exec_monthly_reports_v2');
       localStorage.removeItem('bdrc_user_uploaded_reports_v3');
       localStorage.removeItem('bdrc_user_uploaded_reports_v4');
+      localStorage.removeItem('bdrc_user_uploaded_reports_v5');
     } catch (e) {}
 
-    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v5');
+    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v6');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -272,16 +273,18 @@ export default function App() {
           const reportMap = new Map(initialExecReports.map((r) => [r.monthYear.toLowerCase(), normalizeReportVenues(r)]));
           // User edited reports override defaults
           parsed.forEach((userR: ExecutiveMonthlyReport) => {
-            reportMap.set(userR.monthYear.toLowerCase(), normalizeReportVenues(userR));
+            if (userR && (userR.feedbackVolume > 0 || (userR.mysteryShopMonthlyAvg ?? 0) > 0)) {
+              reportMap.set(userR.monthYear.toLowerCase(), normalizeReportVenues(userR));
+            }
           });
           const list = Array.from(reportMap.values());
-          localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(list));
+          localStorage.setItem('bdrc_user_uploaded_reports_v6', JSON.stringify(list));
           return list;
         }
       } catch (e) {}
     }
     const defaultList = initialExecReports.map(normalizeReportVenues);
-    localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(defaultList));
+    localStorage.setItem('bdrc_user_uploaded_reports_v6', JSON.stringify(defaultList));
     return defaultList;
   });
 
@@ -296,7 +299,7 @@ export default function App() {
       } else {
         next = [normalized, ...prev];
       }
-      localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(next));
+      localStorage.setItem('bdrc_user_uploaded_reports_v6', JSON.stringify(next));
       return next;
     });
     setBannerNotice({

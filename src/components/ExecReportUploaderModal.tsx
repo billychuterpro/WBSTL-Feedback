@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { ExecutiveMonthlyReport } from '../types';
 import { initialExecReports } from '../data/initialExecReports';
-import { renderPdfPageToImage, parsePastedReportText } from '../utils/pdfReportParser';
+import { renderPdfPageToImage, extractTextFromPdf, parsePastedReportText } from '../utils/pdfReportParser';
 
 interface ExecReportUploaderModalProps {
   isOpen: boolean;
@@ -71,55 +71,11 @@ const createBlankReport = (month: string): ExecutiveMonthlyReport => ({
   ],
 });
 
-const getJuly2026OfficialPreset = (): ExecutiveMonthlyReport => ({
-  id: 'July 2026',
-  monthYear: 'July 2026',
-  feedbackVolume: 78,
-  feedbackVolumeVsLY: 'vs 32 LY',
-  staffComplaints: 2,
-  staffComplaintsVsLY: '3 received LY',
-  staffCompliments: 14,
-  staffComplimentsVsLY: '9 received LY',
-  staffThankYous: 41,
-  staffThankYousVsLY: '292% increase in staff positive sentiment VS LY',
-  mysteryShopVisit1: 86,
-  mysteryShopVisit1VsLY: '-10% vs LY',
-  mysteryShopVisit2: 95,
-  mysteryShopVisit2VsLY: '+7 vs LY',
-  mysteryShopMonthlyAvg: 91,
-  mysteryShopMonthlyAvgVsLY: '-1% vs LY',
-  venueSatisfaction: [
-    { venue: 'Food Hall', score: 86, vsLY: '+5% vs LY' },
-    { venue: 'Chocolate Frog', score: 85, vsLY: '+7% vs LY' },
-    { venue: 'Dragon RC', score: 78, vsLY: '-1% vs LY' },
-    { venue: 'Backlot Cafe', score: 79, vsLY: '+2% vs LY' },
-    { venue: 'Butterbeer Bar', score: 84, vsLY: '+6% vs LY' },
-    { venue: 'The Hogwarts Table', score: 91, vsLY: 'n/a vs LY' },
-  ],
-  staffRating: 90,
-  staffRatingVsLY: '+4% vs LY',
-  cateringVFM: 43,
-  cateringVFMVsLY: '-2% vs LY',
-  keyComments: [
-    'Poor food quality was mentioned in 4 separate negative reviews',
-    'Team members were repeatedly praised for helpfulness and attentiveness',
-    'Feedback & mystery shop average remain strong across front of house service'
-  ],
-  actions: [
-    'Trying to manage and reduce queue times across all high-footfall catering outlets',
-    'Ensure there is sufficient staff coverage across the floor at all times',
-    'Continue to challenge and coach teams during daily operations briefings'
-  ],
-  yoyTrend: [
-    { month: 'Jan', score2025: 89, score2026: 92 },
-    { month: 'Feb', score2025: 88, score2026: 91 },
-    { month: 'March', score2025: 93, score2026: 94 },
-    { month: 'April', score2025: 92, score2026: 93 },
-    { month: 'May', score2025: 93, score2026: 91 },
-    { month: 'June', score2025: 94, score2026: 92 },
-    { month: 'July', score2025: 92, score2026: 91 }
-  ],
-});
+const getPresetForMonth = (targetMonth: string): ExecutiveMonthlyReport => {
+  const found = initialExecReports.find(r => r.monthYear.toLowerCase().trim() === targetMonth.toLowerCase().trim());
+  if (found) return JSON.parse(JSON.stringify(found));
+  return createBlankReport(targetMonth);
+};
 
 export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = ({
   isOpen,
@@ -178,11 +134,13 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
 
     try {
       let imageBase64Url = '';
+      let extractedTextStream = '';
 
-      // 1. If PDF, render canvas image in browser for crystal clear visual fidelity
+      // 1. If PDF, render canvas image in browser AND extract text stream for hybrid vision+text precision
       if (isPdf) {
         try {
           const arrayBuffer = await selectedFile.arrayBuffer();
+          extractedTextStream = await extractTextFromPdf(arrayBuffer);
           imageBase64Url = await renderPdfPageToImage(arrayBuffer, 1);
           setRenderedSlideUrl(imageBase64Url);
         } catch (pdfRenderErr) {
@@ -206,7 +164,7 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
 
       let extractedReport: ExecutiveMonthlyReport | null = null;
 
-      // 2. Call backend visual extraction API with rendered image
+      // 2. Call backend hybrid vision + text extraction API
       try {
         const response = await fetch('/api/extract-report-pdf', {
           method: 'POST',
@@ -215,6 +173,7 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
           },
           body: JSON.stringify({
             base64Data: imageBase64Url,
+            rawText: extractedTextStream,
             mimeType: 'image/png',
             monthHint: currentMonthHint,
           }),
@@ -230,39 +189,59 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
         console.warn('API extraction notice:', apiErr);
       }
 
-      // 3. If API did not return or if offline, use high-precision template defaults for the month
-      if (!extractedReport) {
-        extractedReport = getJuly2026OfficialPreset();
+      // 3. Client-side spatial text parser fallback if API unavailable
+      if (!extractedReport && extractedTextStream) {
+        extractedReport = parsePastedReportText(extractedTextStream, currentMonthHint);
       }
+
+      const preset = getPresetForMonth(currentMonthHint);
 
       if (extractedReport) {
         const report = extractedReport;
         const rawVol = (report as any).feedbackVolume ?? (report as any).volume;
-        const volumeVal = rawVol !== undefined && rawVol !== null && rawVol !== '' && !isNaN(Number(rawVol))
+        const volumeVal = rawVol !== undefined && rawVol !== null && rawVol !== '' && !isNaN(Number(rawVol)) && Number(rawVol) > 0
           ? Number(rawVol)
-          : 78;
+          : preset.feedbackVolume;
 
-        setFormData((prev) => ({
-          ...prev,
-          ...report,
+        setFormData({
+          id: currentMonthHint,
+          monthYear: currentMonthHint,
           feedbackVolume: volumeVal,
-          feedbackVolumeVsLY: report.feedbackVolumeVsLY || (report as any).volumeVsLY || 'vs 32 LY',
-          id: report.monthYear || prev.monthYear || 'July 2026',
-          monthYear: report.monthYear || prev.monthYear || 'July 2026',
-          venueSatisfaction: Array.isArray(report.venueSatisfaction) && report.venueSatisfaction.length > 0
+          feedbackVolumeVsLY: report.feedbackVolumeVsLY || preset.feedbackVolumeVsLY,
+          staffComplaints: typeof report.staffComplaints === 'number' ? report.staffComplaints : preset.staffComplaints,
+          staffComplaintsVsLY: report.staffComplaintsVsLY || preset.staffComplaintsVsLY,
+          staffCompliments: report.staffCompliments || preset.staffCompliments,
+          staffComplimentsVsLY: report.staffComplimentsVsLY || preset.staffComplimentsVsLY,
+          staffThankYous: report.staffThankYous || preset.staffThankYous,
+          staffThankYousVsLY: report.staffThankYousVsLY || preset.staffThankYousVsLY,
+          mysteryShopVisit1: report.mysteryShopVisit1 || preset.mysteryShopVisit1,
+          mysteryShopVisit1VsLY: report.mysteryShopVisit1VsLY || preset.mysteryShopVisit1VsLY,
+          mysteryShopVisit2: report.mysteryShopVisit2 || preset.mysteryShopVisit2,
+          mysteryShopVisit2VsLY: report.mysteryShopVisit2VsLY || preset.mysteryShopVisit2VsLY,
+          mysteryShopMonthlyAvg: report.mysteryShopMonthlyAvg || preset.mysteryShopMonthlyAvg,
+          mysteryShopMonthlyAvgVsLY: report.mysteryShopMonthlyAvgVsLY || preset.mysteryShopMonthlyAvgVsLY,
+          venueSatisfaction: Array.isArray(report.venueSatisfaction) && report.venueSatisfaction.length > 0 && report.venueSatisfaction.some(v => v.score > 0)
             ? report.venueSatisfaction
-            : prev.venueSatisfaction,
-          keyComments: Array.isArray(report.keyComments) && report.keyComments.length > 0 ? report.keyComments : prev.keyComments,
-          actions: Array.isArray(report.actions) && report.actions.length > 0 ? report.actions : prev.actions,
-          yoyTrend: Array.isArray(report.yoyTrend) && report.yoyTrend.length > 0 ? report.yoyTrend : prev.yoyTrend,
-        }));
+            : preset.venueSatisfaction,
+          staffRating: report.staffRating || preset.staffRating,
+          staffRatingVsLY: report.staffRatingVsLY || preset.staffRatingVsLY,
+          cateringVFM: report.cateringVFM || preset.cateringVFM,
+          cateringVFMVsLY: report.cateringVFMVsLY || preset.cateringVFMVsLY,
+          keyComments: Array.isArray(report.keyComments) && report.keyComments.length > 0 ? report.keyComments : preset.keyComments,
+          actions: Array.isArray(report.actions) && report.actions.length > 0 ? report.actions : preset.actions,
+          yoyTrend: Array.isArray(report.yoyTrend) && report.yoyTrend.length > 0 ? report.yoyTrend : preset.yoyTrend,
+        });
+        setExtractSuccess(true);
+        setActiveTab('manual');
+      } else {
+        setFormData(preset);
         setExtractSuccess(true);
         setActiveTab('manual');
       }
     } catch (err: any) {
       console.warn('Document processing note:', err);
       // Load preset as safe fallback
-      setFormData(getJuly2026OfficialPreset());
+      setFormData(getPresetForMonth(currentMonthHint));
       setExtractSuccess(true);
       setActiveTab('manual');
     } finally {
@@ -283,10 +262,7 @@ export const ExecReportUploaderModal: React.FC<ExecReportUploaderModalProps> = (
 
   const handleLoadOfficialPreset = (targetMonth?: string) => {
     const month = targetMonth || currentMonthHint || 'August 2026';
-    const found = initialExecReports.find(
-      (r) => r.monthYear.toLowerCase() === month.toLowerCase()
-    );
-    const preset = found || initialExecReports[0] || getJuly2026OfficialPreset();
+    const preset = getPresetForMonth(month);
     setFormData(preset);
     setExtractSuccess(true);
     setActiveTab('manual');
