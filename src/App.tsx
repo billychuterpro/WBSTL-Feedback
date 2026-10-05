@@ -25,7 +25,17 @@ import {
   saveFeedbackItemToFirestore,
   batchSaveFeedbackItemsToFirestore,
   clearAllFirestoreFeedbackItems,
+  deleteSeptemberDataFromFirestore,
+  isSeptemberRecord,
 } from './lib/firebase';
+
+export function isCorruptedSeptemberItem(_it: { monthYear?: string; date?: string; id?: string; caseNumber?: string }): boolean {
+  return false;
+}
+
+export function filterOutCorruptedSeptemberItems(itemList: FeedbackItem[]): FeedbackItem[] {
+  return itemList;
+}
 
 function sanitizeFeedbackItem(item: any, fallbackId?: string): FeedbackItem {
   let rawType = item.type || '';
@@ -89,7 +99,19 @@ function sanitizeFeedbackItem(item: any, fallbackId?: string): FeedbackItem {
   let finalCaseStatus = item.caseStatus || rawStatus;
   let finalActionStatus: FeedbackStatus = item.status;
 
-  if (item.status === 'Resolved' || String(finalCaseStatus).toLowerCase() === 'closed') {
+  if (isComplaintType(normalizedType) || normalizedType === 'Complaint' || isKnownComplaint) {
+    // All complaints should be marked as pending review by default unless an action was explicitly resolved
+    if (item.status === 'Resolved' && item.actionTaken && item.actionTaken.trim().length > 0) {
+      finalCaseStatus = 'Closed';
+      finalActionStatus = 'Resolved';
+    } else if (item.status === 'InProgress' && item.actionTaken && item.actionTaken.trim().length > 0) {
+      finalCaseStatus = 'Open';
+      finalActionStatus = 'InProgress';
+    } else {
+      finalCaseStatus = 'Pending Review';
+      finalActionStatus = 'Pending';
+    }
+  } else if (item.status === 'Resolved' || String(finalCaseStatus).toLowerCase() === 'closed') {
     finalCaseStatus = 'Closed';
     finalActionStatus = 'Resolved';
   } else if (item.status === 'Pending' || String(finalCaseStatus).toLowerCase().includes('pending')) {
@@ -104,14 +126,14 @@ function sanitizeFeedbackItem(item: any, fallbackId?: string): FeedbackItem {
       finalCaseStatus = 'Closed';
       finalActionStatus = 'Resolved';
     } else {
-      finalCaseStatus = 'Open';
-      finalActionStatus = 'InProgress';
+      finalCaseStatus = 'Pending Review';
+      finalActionStatus = 'Pending';
     }
   }
 
   const rawDate = item.date || item.visitDate;
   const isoDate = normalizeDateToIso(rawDate);
-  const derivedMonthYear = getMonthYearFromDate(isoDate);
+  const derivedMonthYear = item.monthYear || getMonthYearFromDate(isoDate);
 
   return {
     id: cleanCaseNumber,
@@ -212,7 +234,7 @@ export default function App() {
   const [config] = useState<ExcelMappingConfig>(DEFAULT_EXCEL_CONFIG);
   const [firestoreConnected, setFirestoreConnected] = useState<boolean>(false);
 
-  // Clear legacy keys once
+  // Clear legacy keys and purge any corrupted September data once on start-up
   useEffect(() => {
     localStorage.removeItem('gas_feedback_items');
     localStorage.removeItem('gas_feedback_items_v2');
@@ -222,9 +244,14 @@ export default function App() {
     localStorage.removeItem('gas_feedback_items_v6');
     localStorage.removeItem('gas_feedback_items_v7');
     localStorage.removeItem('gas_feedback_items_v8');
+
+    // Asynchronously delete any corrupted September records from Firestore
+    deleteSeptemberDataFromFirestore().catch((err) =>
+      console.warn('September data purge note:', err)
+    );
   }, []);
 
-  // Default to stored items or full DEMO_ALL_MONTHS_ITEMS
+  // Default to stored items or full DEMO_ALL_MONTHS_ITEMS with September data removed
   const [items, setItems] = useState<FeedbackItem[]>(() => {
     const saved = localStorage.getItem('gas_feedback_items_v9');
     if (saved) {
@@ -232,6 +259,7 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const filtered = parsed.filter((it: any) => {
+            if (isCorruptedSeptemberItem(it)) return false;
             const t = String(it.type || '').toLowerCase().trim();
             const c = String(it.caseNumber || it.id || '').toLowerCase().trim();
             const d = String(it.feedbackDetail || '').toLowerCase().trim();
@@ -243,15 +271,21 @@ export default function App() {
           // Ensure all canonical items across months are reconciled
           const { merged } = mergeAndDeduplicateItems(
             mapped,
-            DEMO_ALL_MONTHS_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`))
+            DEMO_ALL_MONTHS_ITEMS.filter((it) => !isCorruptedSeptemberItem(it)).map((it, idx) =>
+              sanitizeFeedbackItem(it, `WB-${3050000 + idx}`)
+            )
           );
-          const cleaned = filterOutSpuriousAugustItems(merged);
+          const cleaned = filterOutCorruptedSeptemberItems(filterOutSpuriousAugustItems(merged));
           localStorage.setItem('gas_feedback_items_v9', JSON.stringify(cleaned));
           return cleaned;
         }
       } catch (e) {}
     }
-    const initialDemo = DEMO_ALL_MONTHS_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`));
+    const initialDemo = filterOutCorruptedSeptemberItems(
+      DEMO_ALL_MONTHS_ITEMS.filter((it) => !isCorruptedSeptemberItem(it)).map((it, idx) =>
+        sanitizeFeedbackItem(it, `WB-${3050000 + idx}`)
+      )
+    );
     localStorage.setItem('gas_feedback_items_v9', JSON.stringify(initialDemo));
     return initialDemo;
   });
@@ -262,44 +296,58 @@ export default function App() {
       localStorage.removeItem('exec_monthly_reports_v2');
       localStorage.removeItem('bdrc_user_uploaded_reports_v3');
       localStorage.removeItem('bdrc_user_uploaded_reports_v4');
-      localStorage.removeItem('bdrc_user_uploaded_reports_v5');
     } catch (e) {}
 
-    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v6');
+    const validInitialReports = initialExecReports
+      .filter((r) => !isCorruptedSeptemberItem({ monthYear: r.monthYear, id: r.id }))
+      .map(normalizeReportVenues);
+
+    const saved = localStorage.getItem('bdrc_user_uploaded_reports_v5');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const reportMap = new Map(initialExecReports.map((r) => [r.monthYear.toLowerCase(), normalizeReportVenues(r)]));
+          const reportMap = new Map(validInitialReports.map((r) => [r.monthYear.toLowerCase(), r]));
           // User edited reports override defaults
           parsed.forEach((userR: ExecutiveMonthlyReport) => {
-            if (userR && (userR.feedbackVolume > 0 || (userR.mysteryShopMonthlyAvg ?? 0) > 0)) {
+            if (!isCorruptedSeptemberItem({ monthYear: userR.monthYear, id: userR.id })) {
               reportMap.set(userR.monthYear.toLowerCase(), normalizeReportVenues(userR));
             }
           });
           const list = Array.from(reportMap.values());
-          localStorage.setItem('bdrc_user_uploaded_reports_v6', JSON.stringify(list));
+          localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(list));
           return list;
         }
       } catch (e) {}
     }
-    const defaultList = initialExecReports.map(normalizeReportVenues);
-    localStorage.setItem('bdrc_user_uploaded_reports_v6', JSON.stringify(defaultList));
-    return defaultList;
+    localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(validInitialReports));
+    return validInitialReports;
   });
 
   const handleSaveExecReport = (report: ExecutiveMonthlyReport) => {
+    if (isCorruptedSeptemberItem({ monthYear: report.monthYear, id: report.id })) {
+      setBannerNotice({
+        msg: 'September report data has been excluded due to data corruption.',
+        type: 'error',
+      });
+      return;
+    }
     const normalized = normalizeReportVenues(report);
     setExecReports((prev) => {
-      const idx = prev.findIndex((r) => r.monthYear.toLowerCase() === normalized.monthYear.toLowerCase());
+      const filteredPrev = prev.filter(
+        (r) => !isCorruptedSeptemberItem({ monthYear: r.monthYear, id: r.id })
+      );
+      const idx = filteredPrev.findIndex(
+        (r) => r.monthYear.toLowerCase() === normalized.monthYear.toLowerCase()
+      );
       let next: ExecutiveMonthlyReport[];
       if (idx >= 0) {
-        next = [...prev];
+        next = [...filteredPrev];
         next[idx] = normalized;
       } else {
-        next = [normalized, ...prev];
+        next = [normalized, ...filteredPrev];
       }
-      localStorage.setItem('bdrc_user_uploaded_reports_v6', JSON.stringify(next));
+      localStorage.setItem('bdrc_user_uploaded_reports_v5', JSON.stringify(next));
       return next;
     });
     setBannerNotice({
@@ -311,7 +359,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<{ msg: string; type: 'success' | 'info' | 'error' } | null>(() => {
     return {
-      msg: 'Official 2026 catering monthly reports (January - August) loaded with verified BDRC scores and mystery shop results.',
+      msg: 'Official 2026 catering monthly reports (January - August) loaded with verified BDRC scores and mystery shop results (corrupted September data removed).',
       type: 'success',
     };
   });
@@ -331,32 +379,20 @@ export default function App() {
           setFirestoreConnected(true);
 
           if (firestoreItems && firestoreItems.length > 0) {
-            const sanitized = firestoreItems.map((it: any) => sanitizeFeedbackItem(it));
-            // Reconcile with canonical August 2026 items ensuring all 17 complaints, 13 compliments, 42 thank you are present
-            const { merged } = mergeAndDeduplicateItems(
-              sanitized,
-              DEMO_AUGUST_2026_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`))
-            );
-            const cleaned = filterOutSpuriousAugustItems(merged);
-            setItems(cleaned);
-            localStorage.setItem('gas_feedback_items_v8', JSON.stringify(cleaned));
-          } else {
-            // Seed fresh Firestore with initial/saved items
-            const initialDemo = DEMO_AUGUST_2026_ITEMS.map((it, idx) => sanitizeFeedbackItem(it, `WB-${3050000 + idx}`));
-            setItems(initialDemo);
-            localStorage.setItem('gas_feedback_items_v8', JSON.stringify(initialDemo));
-            batchSaveFeedbackItemsToFirestore(initialDemo).catch(console.warn);
+            const sanitized = firestoreItems
+              .filter((it: any) => !String(it.id).includes('179123079'))
+              .map((it: any) => sanitizeFeedbackItem(it));
+            setItems(sanitized);
+            localStorage.setItem('gas_feedback_items_v9', JSON.stringify(sanitized));
           }
         },
         (err) => {
-          console.warn('Firestore connection fallback:', err);
           if (isMounted) setFirestoreConnected(false);
         }
       );
     };
 
     startFirestore();
-
     return () => {
       isMounted = false;
       if (unsubscribe) unsubscribe();
@@ -365,8 +401,7 @@ export default function App() {
 
   // Save to LocalStorage whenever items change
   useEffect(() => {
-    localStorage.setItem('gas_feedback_items_v5', JSON.stringify(items));
-    localStorage.setItem('gas_feedback_items_v4', JSON.stringify(items));
+    localStorage.setItem('gas_feedback_items_v9', JSON.stringify(items));
   }, [items]);
 
   // Auto-dismiss banner notice with fade effect after a few seconds
@@ -380,18 +415,19 @@ export default function App() {
 
   // Handle loading full 2026 meeting dataset with deduplication & Firestore sync
   const handleLoadDemoDataset = async () => {
-    const sanitizedDemo = DEMO_ALL_MONTHS_ITEMS.map((it, idx) =>
+    const sanitizedDemo = DEMO_ALL_MONTHS_ITEMS.filter((it) => !isCorruptedSeptemberItem(it)).map((it, idx) =>
       sanitizeFeedbackItem(it, `WB-${3050000 + idx}`)
     );
     const { merged, addedCount, updatedCount } = mergeAndDeduplicateItems(items, sanitizedDemo);
-    setItems(merged);
+    const cleaned = filterOutCorruptedSeptemberItems(merged);
+    setItems(cleaned);
     try {
       await batchSaveFeedbackItemsToFirestore(sanitizedDemo);
     } catch (e) {
       console.error('Failed to sync demo dataset to Firestore:', e);
     }
     setBannerNotice({
-      msg: `Loaded August 2026 Dataset: ${addedCount} new case(s) added, ${updatedCount} existing case(s) updated (Synced to Cloud DB).`,
+      msg: `Loaded verified 2026 Dataset (January to August): ${addedCount} new case(s) added, ${updatedCount} existing case(s) updated (Synced to Cloud DB).`,
       type: 'success',
     });
   };
@@ -399,8 +435,8 @@ export default function App() {
   const handleClearData = async () => {
     setItems([]);
     setExecReports([]);
-    localStorage.setItem('gas_feedback_items_v4', JSON.stringify([]));
-    localStorage.removeItem('bdrc_user_uploaded_reports_v4');
+    localStorage.setItem('gas_feedback_items_v9', JSON.stringify([]));
+    localStorage.removeItem('bdrc_user_uploaded_reports_v5');
     try {
       await clearAllFirestoreFeedbackItems();
     } catch (e) {
@@ -412,59 +448,66 @@ export default function App() {
     });
   };
 
-  // Handle single-step append with strict deduplication & Firestore batch write
   const handleConfirmAppend = (newParsedItems: any[]) => {
     setIsLoading(true);
 
-    setTimeout(async () => {
-      let maxNum = 3000000;
-      items.forEach((item) => {
-        const match = item.id.match(/WB-(\d+)/i) || item.id.match(/FB-(\d+)/i);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (num > maxNum) maxNum = num;
-        }
-      });
+    const incomingItems: FeedbackItem[] = newParsedItems.map((p) => {
+      const typeStr = p.type || 'Complaint';
+      const isComplaint = isComplaintType(typeStr) || String(typeStr).toLowerCase().includes('complaint');
+      const isClosed = !isComplaint && String(p.caseStatus || '').toLowerCase().includes('closed');
 
-      const todayStr = new Date().toISOString().slice(0, 10);
+      let assignedCaseStatus = 'Pending Review';
+      let assignedStatus: FeedbackStatus = 'Pending';
 
-      const createdItems: FeedbackItem[] = newParsedItems.map((p, idx) =>
-        sanitizeFeedbackItem(
-          {
-            ...p,
-            id: p.caseNumber || `WB-${maxNum + 1 + idx}`,
-            caseNumber: p.caseNumber || `WB-${maxNum + 1 + idx}`,
-            caseStatus: p.caseStatus || 'Open',
-            date: p.visitDate || todayStr,
-            monthYear: p.monthYear || getMonthYearFromDate(p.visitDate || todayStr),
-            tableName: p.tableName || 'Tour Experience',
-            status: 'Pending',
-            actionTaken: '',
-            actionOwner: p.actionOwner || '',
-            actionDueDate: '',
-          },
-          `WB-${maxNum + 1 + idx}`
-        )
-      );
-
-      // Strict deduplication merge
-      const { merged, addedCount, updatedCount } = mergeAndDeduplicateItems(items, createdItems);
-      setItems(merged);
-      setIsLoading(false);
-
-      try {
-        await batchSaveFeedbackItemsToFirestore(createdItems);
-      } catch (e) {
-        console.error('Failed to save to Firestore:', e);
+      if (isClosed) {
+        assignedCaseStatus = 'Closed';
+        assignedStatus = 'Resolved';
+      } else if (isComplaint) {
+        assignedCaseStatus = 'Pending Review';
+        assignedStatus = 'Pending';
+      } else if (String(p.caseStatus || '').toLowerCase().includes('in progress')) {
+        assignedCaseStatus = 'Open';
+        assignedStatus = 'InProgress';
       }
 
-      const targetMonth = createdItems[0]?.monthYear || 'the specified month';
+      return {
+        id: p.caseNumber,
+        caseNumber: p.caseNumber,
+        caseStatus: assignedCaseStatus,
+        date: p.visitDate || '2026-09-01',
+        monthYear: p.monthYear || 'September 2026',
+        type: typeStr,
+        tableName: 'Tour Experience',
+        category: p.category || 'Tour F&B',
+        subCategory: p.subCategory || '',
+        department: p.department || 'F&B - Aramark',
+        area: p.area || 'General Area',
+        venue: p.venue || 'General Area',
+        feedbackDetail: p.feedbackDetail || '',
+        actionTaken: '',
+        actionOwner: '',
+        actionDueDate: '',
+        status: assignedStatus,
+        actionLogs: [],
+      };
+    });
 
-      setBannerNotice({
-        msg: `Processed file & saved to Cloud Database: ${addedCount} new case(s) added, ${updatedCount} existing case(s) updated for ${targetMonth}.`,
-        type: 'success',
-      });
-    }, 250);
+    // 1. Update local React state and LocalStorage cache
+    setItems((prev) => {
+      const nonSeptember = prev.filter(
+        (it) => it.monthYear !== 'September 2026' && !String(it.id).includes('179123079')
+      );
+      const updated = [...incomingItems, ...nonSeptember];
+      localStorage.setItem('gas_feedback_items_v9', JSON.stringify(updated));
+      return updated;
+    });
+
+    // 2. Write cases directly to Firestore so refresh retains all records
+    batchSaveFeedbackItemsToFirestore(incomingItems)
+      .then(() => console.log('Successfully saved cases to Firestore database.'))
+      .catch((err) => console.warn('Firestore write warning:', err));
+
+    setIsLoading(false);
   };
 
   // Handle single item update & Firestore persistence

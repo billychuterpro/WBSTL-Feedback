@@ -1,295 +1,144 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Upload, FileSpreadsheet, Check, AlertCircle, RefreshCw, Calendar, Sparkles } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Upload, RefreshCw, Calendar } from 'lucide-react';
 import { ExcelMappingConfig, ParsedPreviewItem } from '../types';
-import { parseExcelBuffer } from '../utils/excelHelper';
-import { MONTH_NAMES, inferMonthFromFileName } from '../utils/dateUtils';
+import * as XLSX from 'xlsx';
 
 interface ExcelUploaderProps {
-  config: ExcelMappingConfig;
+  config?: ExcelMappingConfig;
   onConfirmAppend: (items: ParsedPreviewItem[]) => void;
   isProcessing?: boolean;
 }
 
-export const ExcelUploader: React.FC<ExcelUploaderProps> = ({
-  config,
-  onConfirmAppend,
-  isProcessing = false,
-}) => {
-  const [isDragging, setIsDragging] = useState(false);
+export const ExcelUploader: React.FC<ExcelUploaderProps> = ({ onConfirmAppend, isProcessing = false }) => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isParsingLocal, setIsParsingLocal] = useState(false);
-
-  // Default target month for cases without row-level dates
-  const [selectedTargetMonth, setSelectedTargetMonth] = useState<string>('August 2026');
-  const [detectedMonthNotice, setDetectedMonthNotice] = useState<string | null>(null);
-
+  const [selectedTargetMonth, setSelectedTargetMonth] = useState<string>('September 2026');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Month options for quick selection (current year and surrounding months)
   const monthOptions = [
-    'Auto-detect from File',
-    'January 2026',
-    'February 2026',
-    'March 2026',
-    'April 2026',
-    'May 2026',
-    'June 2026',
-    'July 2026',
-    'August 2026',
-    'September 2026',
-    'October 2026',
-    'November 2026',
-    'December 2026',
-    'January 2025',
-    'February 2025',
-    'March 2025',
-    'April 2025',
-    'May 2025',
-    'June 2025',
-    'July 2025',
-    'August 2025',
-    'September 2025',
-    'October 2025',
-    'November 2025',
-    'December 2025',
+    'January 2026', 'February 2026', 'March 2026', 'April 2026', 'May 2026', 'June 2026',
+    'July 2026', 'August 2026', 'September 2026', 'October 2026', 'November 2026', 'December 2026'
   ];
 
-  // Auto-dismiss upload status messages after a few seconds
-  useEffect(() => {
-    if (!successMsg && !errorMsg) return;
-    const timer = setTimeout(() => {
-      setSuccessMsg(null);
-      setErrorMsg(null);
-      setDetectedMonthNotice(null);
-    }, 6000);
-    return () => clearTimeout(timer);
-  }, [successMsg, errorMsg]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processAndUploadFile(e.target.files[0]);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const droppedFile = e.dataTransfer.files[0];
-      const lowerName = droppedFile.name.toLowerCase();
-      if (!lowerName.endsWith('.xlsx') && !lowerName.endsWith('.xls') && !lowerName.endsWith('.csv')) {
-        setErrorMsg('Please upload a valid Excel or CSV spreadsheet (.xlsx, .xls, .csv).');
-        return;
-      }
-      processAndUploadFile(droppedFile);
-    }
-  };
-
-  const processAndUploadFile = async (selectedFile: File) => {
+  const processExcelFile = (file: File) => {
     setErrorMsg(null);
     setSuccessMsg(null);
-    setDetectedMonthNotice(null);
     setIsParsingLocal(true);
 
-    try {
-      // Check if filename contains a month name or timestamp
-      const fileInferredMonth = inferMonthFromFileName(selectedFile.name);
-      let effectiveTargetMonth = selectedTargetMonth === 'Auto-detect from File' ? undefined : selectedTargetMonth;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buffer = e.target?.result as ArrayBuffer;
+        const data = new Uint8Array(buffer);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-      const arrayBuffer = await selectedFile.arrayBuffer();
-      const { items, sheetName, reportMetadata } = parseExcelBuffer(arrayBuffer, config, {
-        fileName: selectedFile.name,
-        targetMonth: effectiveTargetMonth,
-      });
+        const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+        const parsedItems: ParsedPreviewItem[] = [];
+        
+        let activeStatus = 'Closed';
+        let activeType = 'Complaint';
 
-      if (reportMetadata && selectedTargetMonth === 'Auto-detect from File') {
-        setDetectedMonthNotice(`Detected from Report Filter: ${reportMetadata.rawRangeText} → Assigned to ${reportMetadata.detectedMonth}`);
-      } else if (fileInferredMonth && selectedTargetMonth === 'Auto-detect from File') {
-        setDetectedMonthNotice(`Auto-detected month from file name / timestamp: ${fileInferredMonth}`);
-      }
+        for (let i = 0; i < rawRows.length; i++) {
+          const row = rawRows[i];
+          if (!row || !Array.isArray(row) || row.length === 0) continue;
 
-      if (items.length === 0) {
-        setErrorMsg(
-          `No valid WB cases found in "${selectedFile.name}". Please ensure the file contains rows with WB case numbers (e.g. WB-3095854).`
-        );
+          const col1 = String(row[1] || '').trim();
+          const col2 = String(row[2] || '').trim();
+          const col3 = String(row[3] || '').trim();
+          const summaryCheck = `${col1} ${col2} ${col3}`.toLowerCase();
+
+          if (summaryCheck.includes('subtotal') || summaryCheck.startsWith('total')) continue;
+
+          if (col1 && !col1.toLowerCase().includes('status')) activeStatus = col1;
+          if (col2 && !col2.toLowerCase().includes('type')) activeType = col2;
+
+          const caseNum = String(row[4] || '').trim();
+          const category = String(row[5] || 'Tour F&B').trim();
+          const subCategory = String(row[6] || '').trim();
+          const department = String(row[7] || 'F&B - Aramark').trim();
+          const area = String(row[8] || 'General Area').trim();
+          const description = String(row[9] || '').trim();
+
+          if (caseNum.toUpperCase().startsWith('WB-')) {
+            const isComplaint = activeType.toLowerCase().includes('complaint');
+            const initialCaseStatus = isComplaint ? 'Pending Review' : (activeStatus || 'Closed');
+
+            parsedItems.push({
+              rowNum: i,
+              caseNumber: caseNum,
+              caseStatus: initialCaseStatus,
+              type: activeType,
+              category: category,
+              subCategory: subCategory,
+              department: department,
+              area: area || department,
+              venue: area || department,
+              visitDate: '2026-09-01',
+              monthYear: selectedTargetMonth,
+              feedbackDetail: description || '(No description text provided)',
+              isValid: true,
+            });
+          }
+        }
+
+        if (parsedItems.length === 0) throw new Error('No valid WB- case numbers found.');
+
+        onConfirmAppend(parsedItems);
+        setSuccessMsg(`Imported ${parsedItems.length} cases into "${selectedTargetMonth}".`);
+      } catch (err: any) {
+        setErrorMsg(`Excel parse failed: ${err.message}`);
+      } finally {
         setIsParsingLocal(false);
-        return;
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
+    };
 
-      const validItems = items.filter((i) => i.isValid);
-
-      if (validItems.length === 0) {
-        setErrorMsg('No valid items found to import.');
-        setIsParsingLocal(false);
-        return;
-      }
-
-      // Determine which month was assigned
-      const assignedMonth = validItems[0]?.monthYear || effectiveTargetMonth || (reportMetadata ? reportMetadata.detectedMonth : 'assigned month');
-
-      // Single-step direct upload: immediately append records to the active dataset
-      onConfirmAppend(validItems);
-      setSuccessMsg(
-        `Imported ${validItems.length} WB cases into "${assignedMonth}" from "${selectedFile.name}" (Sheet: ${sheetName || 'Sheet1'}).`
-      );
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(`Failed to parse Excel file: ${err.message || 'Invalid format'}`);
-    } finally {
-      setIsParsingLocal(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
+    reader.readAsArrayBuffer(file);
   };
 
   const busy = isProcessing || isParsingLocal;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      {/* Month Selection Bar for Files without Visit Dates */}
-      <div className="px-5 py-3 bg-slate-950/70 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-300">
-          <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
-          <span className="font-semibold text-white">Target Report Month:</span>
-          <span className="text-slate-400 hidden sm:inline">
-            (Used if spreadsheet has no visit date column)
-          </span>
+    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+        <div className="flex items-center gap-2 text-slate-200">
+          <Calendar className="w-5 h-5 text-amber-400"/>
+          <span className="font-bold text-sm">Target Report Month:</span>
         </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedTargetMonth}
-            onChange={(e) => setSelectedTargetMonth(e.target.value)}
-            disabled={busy}
-            className="bg-slate-900 border border-slate-700 text-amber-300 font-semibold px-3 py-1.5 rounded-lg text-xs focus:ring-1 focus:ring-amber-500 focus:outline-none"
-          >
-            {monthOptions.map((m) => (
-              <option key={m} value={m} className="bg-slate-900 text-slate-100">
-                {m}
-              </option>
-            ))}
-          </select>
-          {selectedTargetMonth !== 'Auto-detect from File' && (
-            <span className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-medium rounded-md">
-              Assigns to: {selectedTargetMonth}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* File Drag & Drop Zone */}
-      <div className="p-5">
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => !busy && fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition flex flex-col items-center justify-center gap-3 ${
-            isDragging
-              ? 'border-amber-400 bg-amber-500/10'
-              : busy
-              ? 'border-slate-700 bg-slate-900/50 cursor-wait'
-              : 'border-slate-700 hover:border-amber-500/60 bg-slate-950/40 hover:bg-slate-950/80'
-          }`}
+        <select
+          value={selectedTargetMonth}
+          onChange={(e) => setSelectedTargetMonth(e.target.value)}
+          disabled={busy}
+          className="bg-slate-800 border border-slate-700 text-amber-300 font-semibold px-3 py-1.5 rounded-lg text-xs"
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv"
-            onChange={handleFileChange}
-            disabled={busy}
-            className="hidden"
-          />
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
-                {busy ? (
-                  <RefreshCw className="w-6 h-6 animate-spin text-amber-400" />
-                ) : (
-                  <FileSpreadsheet className="w-6 h-6" />
-                )}
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-semibold text-white">
-                  {busy ? 'Parsing & Importing Excel Report...' : 'Upload Monthly Feedback Excel (.xlsx)'}
-                </p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Drag and drop your spreadsheet here or click to browse. Automatically extracts WB cases, detects feedback types, and assigns to{' '}
-                  <span className="font-semibold text-amber-400">{selectedTargetMonth}</span>.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              disabled={busy}
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow-md shrink-0 transition flex items-center gap-2"
-            >
-              {busy ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Importing...</span>
-                </>
-              ) : (
-                <>
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Choose .xlsx File</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Feedback error messages */}
-        <AnimatePresence>
-          {errorMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              className="mt-3.5 p-3 rounded-lg bg-rose-950/80 border border-rose-500/50 text-rose-300 text-xs flex items-center gap-2"
-            >
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span>{errorMsg}</span>
-            </motion.div>
-          )}
-
-          {successMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              className="mt-3.5 p-3 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-2"
-            >
-              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-              <div className="flex flex-col">
-                <span className="font-semibold">{successMsg}</span>
-                {detectedMonthNotice && (
-                  <span className="text-[11px] text-emerald-400/90">{detectedMonthNotice}</span>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {monthOptions.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
       </div>
+
+      <div
+        onClick={() => !busy && fileInputRef.current?.click()}
+        className="p-8 border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-xl text-center cursor-pointer bg-slate-950/40 hover:bg-slate-800/40 transition flex flex-col items-center justify-center gap-2"
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx, .xls"
+          onChange={(e) => e.target.files?.[0] && processExcelFile(e.target.files[0])}
+          className="hidden"
+          disabled={busy}
+        />
+        {busy ? <RefreshCw className="w-8 h-8 animate-spin text-amber-400"/> : <Upload className="w-8 h-8 text-amber-400"/>}
+        <p className="text-white font-bold text-sm">
+          {busy ? 'Processing Spreadsheet...' : 'Select Excel Document (.xlsx)'}
+        </p>
+      </div>
+
+      {errorMsg && <p className="text-red-400 mt-3 text-xs font-semibold">{errorMsg}</p>}
+      {successMsg && <p className="text-emerald-400 mt-3 text-xs font-semibold">{successMsg}</p>}
     </div>
   );
 };
-

@@ -96,10 +96,12 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
 
   // Auto-set selectedMonth to newest available month on first load
   useEffect(() => {
-    if (availableMonths.length > 0 && selectedMonth === 'ALL') {
-      setSelectedMonth(availableMonths[0].month);
+    if (availableMonths.length > 0) {
+      if (selectedMonth === 'ALL') {
+        setSelectedMonth(availableMonths[0].month);
+      }
     }
-  }, [availableMonths]);
+  }, [availableMonths, selectedMonth]);
 
   // Active items filtered strictly by parsed visit date / month
   const activeItems = useMemo(() => {
@@ -1440,12 +1442,7 @@ export const PresentationDashboard: React.FC<PresentationDashboardProps> = ({
           <MysteryShopSlide
             report={activeExecReport}
             selectedMonth={selectedMonth}
-            onOpenUploadModal={(m) => {
-              if (m) setSelectedMonth(m);
-              setIsExecModalOpen(true);
-            }}
-            allReports={execReports}
-            onSelectMonth={(m) => setSelectedMonth(m)}
+            onOpenUploadModal={() => setIsExecModalOpen(true)}
           />
         )}
 

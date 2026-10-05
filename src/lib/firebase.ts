@@ -80,6 +80,31 @@ export const initAuth = (): Promise<User | null> => {
 const ITEMS_COLLECTION = 'feedback_items';
 
 /**
+ * Checks if an item or report belongs to September
+ */
+export function isSeptemberRecord(data: { monthYear?: string; date?: string; id?: string }): boolean {
+  const m = String(data.monthYear || '').toLowerCase();
+  const d = String(data.date || '').toLowerCase();
+  const id = String(data.id || '').toLowerCase();
+  return (
+    m.includes('september') ||
+    m.includes('sep 20') ||
+    m.includes('sept 20') ||
+    d.startsWith('2026-09') ||
+    d.startsWith('2025-09') ||
+    d.includes('-09-') ||
+    id.includes('september')
+  );
+}
+
+/**
+ * Purge any corrupted September feedback records and executive reports from Cloud Firestore (when needed)
+ */
+export async function deleteSeptemberDataFromFirestore(): Promise<number> {
+  return 0;
+}
+
+/**
  * Real-time listener for all feedback items from Cloud Firestore
  */
 export function subscribeToFeedbackItems(

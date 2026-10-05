@@ -212,7 +212,7 @@ export const FeedbackTable: React.FC<FeedbackTableProps> = ({
                   : 'text-amber-700 hover:bg-amber-50'
               }`}
             >
-              Pending ({countPending})
+              Pending Review ({countPending})
             </button>
             <button
               onClick={() => setStatusFilter('InProgress')}
@@ -399,7 +399,7 @@ export const FeedbackTable: React.FC<FeedbackTableProps> = ({
                               : 'bg-emerald-50 text-emerald-800 border-emerald-300'
                           }`}
                         >
-                          <option value="Pending">Pending</option>
+                          <option value="Pending">Pending Review</option>
                           <option value="InProgress">In Progress</option>
                           <option value="Resolved">Resolved</option>
                         </select>
